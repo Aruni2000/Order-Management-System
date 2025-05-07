@@ -1,0 +1,17 @@
+[2025-03-25 01:41:06] Update User Request Started
+[2025-03-25 01:41:06] POST Data: Array
+(
+    [csrf_token] => 49b17d282cf3f3ca0a7d75c2f8ef941af6a0af35df6d91b1ec2525ca629c6071
+    [user_id] => 28
+    [name] => testing2
+    [email] => test2@gmail.com
+    [mobile] => 0712345678
+    [nic] => 202062603324
+    [address] => test2add
+    [status] => active
+    [role_id] => 2
+    [password] => 
+    [confirm_password] => 
+)
+
+[2025-03-25 01:41:06] User profile updated successfully for User ID: 28

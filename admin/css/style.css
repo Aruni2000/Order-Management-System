@@ -1,0 +1,69 @@
+/*!
+ * Cteate_order page style start here
+ */
+
+body.sb-nav-fixed #layoutSidenav #layoutSidenav_content {
+    background-color: #f4f6f9;
+    font-family: 'Inter', sans-serif;
+}
+
+.order-container {
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 30px;
+    margin: 10px;
+}
+
+.form-section {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.form-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.form-control,
+.form-select {
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.section-title {
+    color: #2c3e50;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.table> :not(caption)>*>* {
+    padding: 1px;
+}
+
+#order_table .remove_product {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    transform: scale(0.7);
+}
+
+.validation-error {
+    color: red;
+    font-size: 0.8em;
+    margin-top: 5px;
+}
+/*!
+ * Cteate_order page style end here
+ */
+
+
+
+
+
+ 

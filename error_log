@@ -1,0 +1,18 @@
+[18-Mar-2025 22:28:50 America/Chicago] PHP Fatal error:  Uncaught mysqli_sql_exception: Access denied for user 'root'@'localhost' (using password: NO) in /home1/imwijqte/public_html/db_config.php:12
+Stack trace:
+#0 /home1/imwijqte/public_html/db_config.php(12): mysqli->__construct('localhost', 'root', Object(SensitiveParameterValue), 'fe_it')
+#1 /home1/imwijqte/public_html/contact.php(30): connectDB()
+#2 {main}
+  thrown in /home1/imwijqte/public_html/db_config.php on line 12
+[18-Mar-2025 22:28:53 America/Chicago] PHP Fatal error:  Uncaught mysqli_sql_exception: Access denied for user 'root'@'localhost' (using password: NO) in /home1/imwijqte/public_html/db_config.php:12
+Stack trace:
+#0 /home1/imwijqte/public_html/db_config.php(12): mysqli->__construct('localhost', 'root', Object(SensitiveParameterValue), 'fe_it')
+#1 /home1/imwijqte/public_html/contact.php(30): connectDB()
+#2 {main}
+  thrown in /home1/imwijqte/public_html/db_config.php on line 12
+[18-Mar-2025 22:29:12 America/Chicago] PHP Fatal error:  Uncaught mysqli_sql_exception: Access denied for user 'root'@'localhost' (using password: NO) in /home1/imwijqte/public_html/db_config.php:12
+Stack trace:
+#0 /home1/imwijqte/public_html/db_config.php(12): mysqli->__construct('localhost', 'root', Object(SensitiveParameterValue), 'fe_it')
+#1 /home1/imwijqte/public_html/contact.php(30): connectDB()
+#2 {main}
+  thrown in /home1/imwijqte/public_html/db_config.php on line 12
