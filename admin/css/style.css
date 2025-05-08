@@ -62,7 +62,74 @@ body.sb-nav-fixed #layoutSidenav #layoutSidenav_content {
  * Cteate_order page style end here
  */
 
+ .form-container {
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
 
+.lead-import-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.form-label {
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.download-link {
+    color: #1565C0;
+    text-decoration: none;
+    margin-bottom: 15px;
+    display: inline-block;
+}
+
+.download-link:hover {
+    text-decoration: underline;
+}
+
+.form-control {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.file-input-container {
+    display: flex;
+}
+
+.file-name-display {
+    flex-grow: 1;
+    border: 1px solid #ced4da;
+    border-radius: 4px 0 0 4px;
+    padding: 0.375rem 0.75rem;
+    background-color: #f8f9fa;
+}
+
+.choose-file-btn {
+    border-radius: 0 4px 4px 0;
+}
+
+.buttons-container {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn-reset {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #212529;
+}
+
+.btn-import {
+    background-color: #1565C0;
+    border-color: #1565C0;
+}
 
 
 

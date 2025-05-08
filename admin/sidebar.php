@@ -33,6 +33,22 @@
                 </div>
 
 
+                <!-- Lead Section -->
+                <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseLeads"
+                    aria-expanded="false" aria-controls="collapseLeads" id="leads-dropdown">
+                    <div class="sb-nav-link-icon"><i class="fas fa-user-friends"></i></div>
+                    Leads
+                    <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                </a>
+                <div class="collapse" id="collapseLeads" data-bs-parent="#sidenavAccordion">
+                    <nav class="sb-sidenav-menu-nested nav">
+                    <a class="nav-link" href="lead_upload.php" id="lead-upload-link">Lead Upload</a>
+                        <a class="nav-link" href="lead_list.php" id="all-leads-link">Lead List</a>
+                        
+                    </nav>
+                </div>
+
+
                 <!-- Users Section -->
                 <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseUsers"
                     aria-expanded="false" aria-controls="collapseUsers" id="users-dropdown">
@@ -83,8 +99,8 @@
                     </nav>
                 </div>
 
-                  <!-- Settings Section -->
-                  <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapsesettings"
+                <!-- Settings Section -->
+                <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapsesettings"
                     aria-expanded="false" aria-controls="collapsesettings" id="products-dropdown">
                     <div class="sb-nav-link-icon"><i class="fas fa-cog fa-fw me-2"></i></div>
                     Settings
@@ -100,7 +116,7 @@
                 </div>
 
 
-             
+
             </div>
         </div>
         <!-- <div class="sb-sidenav-footer">
