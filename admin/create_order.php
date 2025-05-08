@@ -48,7 +48,12 @@ if ($deliveryFeeResult && $deliveryFeeResult->num_rows > 0) {
         <div id="layoutSidenav_content">
             <main>
                 <div class="alert-container"></div>
-                <h1 class="page-title mt-4 text-center mb-4">Create New Order</h1>
+                <div class="container-fluid px-4">
+                    <br>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4>Create new Order</h4>
+                    </div> 
+                                 
                 <div class="order-container">
                     <form method="post" action="process_order.php" id="orderForm" target="_blank">
 
@@ -271,6 +276,7 @@ if ($deliveryFeeResult && $deliveryFeeResult->num_rows > 0) {
                     </form>
                 </div>
             </main>
+            </div>
 
             <!-- Customer Selection Modal -->
             <div id="customerModal" class="customer-modal">
@@ -653,9 +659,26 @@ if ($deliveryFeeResult && $deliveryFeeResult->num_rows > 0) {
             // Initialize the form on page load
             updateTotals();
         });
+
+        // Sidebar Toggle Script
+document.addEventListener('DOMContentLoaded', function() {
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.body.classList.toggle('sb-sidenav-toggled');
+            localStorage.setItem('sb|sidebar-toggle', document.body.classList.contains('sb-sidenav-toggled'));
+        });
+    }
+
+    // Check for stored state on page load
+    const storedSidebarState = localStorage.getItem('sb|sidebar-toggle');
+    if (storedSidebarState === 'true') {
+        document.body.classList.add('sb-sidenav-toggled');
+    }
+});
     </script>
 </body>
-
 </html>
 <?php
 // Close database connections
