@@ -209,9 +209,11 @@ $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
 $offset = ($page - 1) * $limit;
 
 // Build basic SQL query with JOIN to customers table and payment information
+// MODIFIED: Added WHERE clause to filter for interface = 'individual'
 $countSql = "SELECT COUNT(*) as total FROM order_header i 
              LEFT JOIN customers c ON i.customer_id = c.customer_id
-             LEFT JOIN users u2 ON i.created_by = u2.id"; // Added JOIN with users table for u2
+             LEFT JOIN users u2 ON i.created_by = u2.id
+             WHERE i.interface = 'individual'"; // Filter for individual interface only
 
 $sql = "SELECT i.*, c.name as customer_name, 
                p.payment_id, p.amount_paid, p.payment_method, p.payment_date, p.pay_by,
@@ -221,12 +223,13 @@ $sql = "SELECT i.*, c.name as customer_name,
         LEFT JOIN customers c ON i.customer_id = c.customer_id
         LEFT JOIN payments p ON i.order_id = p.order_id
         LEFT JOIN users u1 ON p.pay_by = u1.id
-        LEFT JOIN users u2 ON i.created_by = u2.id";
+        LEFT JOIN users u2 ON i.created_by = u2.id
+        WHERE i.interface = 'individual'"; // Filter for individual interface only
 
 // Add search condition if search term is provided
 if (!empty($search)) {
     $searchTerm = $conn->real_escape_string($search);
-    $searchCondition = " WHERE (
+    $searchCondition = " AND (
                         i.order_id LIKE '%$searchTerm%' OR 
                         c.name LIKE '%$searchTerm%' OR 
                         i.issue_date LIKE '%$searchTerm%' OR 

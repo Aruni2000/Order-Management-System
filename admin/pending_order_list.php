@@ -23,15 +23,17 @@ $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
 $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
 $offset = ($page - 1) * $limit;
 
-// Build basic SQL query with JOIN to customers table and filter by pending status
+// Build basic SQL query with JOIN to customers table and filter by pending status and interface=individual
 $countSql = "SELECT COUNT(*) as total FROM order_header i 
              LEFT JOIN customers c ON i.customer_id = c.customer_id
-             WHERE (i.status = 'pending' OR i.status IS NULL OR i.status = '')";
+             WHERE (i.status = 'pending' OR i.status IS NULL OR i.status = '') 
+             AND i.interface = 'individual'";
 
 $sql = "SELECT i.*, c.name as customer_name 
         FROM order_header i 
         LEFT JOIN customers c ON i.customer_id = c.customer_id
-        WHERE (i.status = 'pending' OR i.status IS NULL OR i.status = '')";
+        WHERE (i.status = 'pending' OR i.status IS NULL OR i.status = '') 
+        AND i.interface = 'individual'";
 
 // Add search condition if search term is provided
 if (!empty($search)) {
@@ -66,7 +68,7 @@ $result = $conn->query($sql);
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>Pending Ordrs</title>
+    <title>Pending Orders - Individual</title>
     <!-- FAVICON -->
     <link rel="icon" href="img/system/letter-f.png" type="image/png">
     <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
@@ -87,7 +89,7 @@ $result = $conn->query($sql);
                 <div class="container-fluid px-4">
                     <br>
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h4>Pending Orders</h4>
+                        <h4>Pending Individual Orders</h4>
                     </div>
                     <div class="card">
                         <div class="card-body">
@@ -138,7 +140,7 @@ $result = $conn->query($sql);
                                 </div>
                             </div>
 
-                            <h5 class="mb-3">Manage Pending Orders</h5>
+                            <h5 class="mb-3">Manage Pending Individual Orders</h5>
                             <?php if (!empty($search)): ?>
                                 <div class="alert alert-info">
                                     Showing search results for: <strong><?php echo htmlspecialchars($search); ?></strong>
@@ -223,7 +225,7 @@ $result = $conn->query($sql);
                                             <?php endwhile; ?>
                                         <?php else: ?>
                                             <tr>
-                                                <td colspan="8" class="text-center">No pending Orders found</td>
+                                                <td colspan="8" class="text-center">No pending individual orders found</td>
                                             </tr>
                                         <?php endif; ?>
                                     </tbody>
@@ -634,7 +636,7 @@ $result = $conn->query($sql);
                     }
                 });
             });
-
+            
             // Reset form when modal is hidden
             $('#markPaidModal').on('hidden.bs.modal', function () {
                 $('#markPaidForm')[0].reset();

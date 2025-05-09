@@ -17,7 +17,6 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
 
 // Include the database connection file
 include 'db_connection.php';
-
 include 'functions.php'; // Include helper functions
 
 // Function to generate CSRF token
@@ -53,13 +52,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['import_leads'])) {
     } else {
         // Process file upload
         if (isset($_FILES['lead_file']) && $_FILES['lead_file']['error'] == 0) {
-            $allowed_ext = ['csv', 'xlsx', 'xls'];
+            $allowed_ext = ['csv', 'xls', 'xlsx']; // Allowed file extensions
             $file_name = $_FILES['lead_file']['name'];
             $file_size = $_FILES['lead_file']['size'];
             $file_tmp = $_FILES['lead_file']['tmp_name'];
             $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
             
-            // Get selected user IDs (now can be multiple)
+            // Get selected user IDs (can be multiple)
             $selected_user_ids = isset($_POST['user_ids']) ? $_POST['user_ids'] : [$current_user_id];
             
             // Validate file extension
@@ -80,37 +79,192 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['import_leads'])) {
                         $processed = false;
                         $note = isset($_POST['note']) ? trim($_POST['note']) : '';
                         
-                        // Process each selected user
-                        foreach ($selected_user_ids as $selected_user_id) {
-                            // Get user info from database
-                            $user_stmt = $conn->prepare("SELECT id, name FROM users WHERE id = ?");
-                            $user_stmt->bind_param("i", $selected_user_id);
-                            $user_stmt->execute();
-                            $user_result = $user_stmt->get_result();
-                            $user_data = $user_result->fetch_assoc();
-                            $user_stmt->close();
-                            
-                            $user_name = $user_data['name'] ?? 'Unknown User';
-                            
-                            // Store upload record in database for each user
-                            $stmt = $conn->prepare("INSERT INTO lead_imports (file_name, original_name, note, imported_by, user_id, status) VALUES (?, ?, ?, ?, ?, 'pending')");
-                            $stmt->bind_param("ssssi", $new_file_name, $file_name, $note, $user_name, $selected_user_id);
-                            
-                            if ($stmt->execute()) {
-                                $import_id = $conn->insert_id;
-                                $processed = true;
+                        // Process the uploaded file based on extension
+                        $processed_count = 0;
+                        $error_count = 0;
+                        
+                        // Storage for already processed leads to avoid duplicates
+                        $processed_leads = [];
+                        
+                        if ($file_ext == 'csv') {
+                            // Process CSV file
+                            if (($handle = fopen($upload_path, "r")) !== FALSE) {
+                                // Read header row
+                                $header = fgetcsv($handle, 1000, ",");
+                                
+                                // Process each row
+                                while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
+                                    // Check if row has data
+                                    if (!empty($data[0])) {
+                                        // Use the first column as unique identifier for deduplication
+                                        $lead_key = md5($data[0] . $data[2]); // Hash of name + phone
+                                        
+                                        // Skip if this lead has already been processed
+                                        if (isset($processed_leads[$lead_key])) {
+                                            continue;
+                                        }
+                                        
+                                        // Extract data from CSV columns - CORRECTED ORDER
+                                        $full_name = !empty($data[0]) ? $conn->real_escape_string(trim($data[0])) : '';
+                                        $city = !empty($data[1]) ? $conn->real_escape_string(trim($data[1])) : ''; 
+                                        $mobile = !empty($data[2]) ? $conn->real_escape_string(trim($data[2])) : '';
+                                        $product_code = !empty($data[3]) ? $conn->real_escape_string(trim($data[3])) : '';
+                                        $custom_note = !empty($data[4]) ? $conn->real_escape_string(trim($data[4])) : '';
+                                        
+                                        // Default values
+                                        $subtotal = 0;
+                                        $pay_by = 'cash';
+                                        $currency = 'lkr';
+                                        $total_amount = $subtotal;
+                                        
+                                        $issue_date = date('Y-m-d');
+                                        $due_date = date('Y-m-d', strtotime('+30 days'));
+                                        
+                                        // Process for selected user
+                                        foreach ($selected_user_ids as $selected_user_id) {
+                                            $user_id = (int)$selected_user_id;
+                                            
+                                            // Insert into order_header table
+                                            $sql = "INSERT INTO order_header 
+                                                (customer_id, user_id, issue_date, due_date, subtotal, 
+                                                notes, pay_status, pay_by, total_amount, currency, status, 
+                                                product_code, interface, created_by, mobile, custom_note, city, full_name) 
+                                                VALUES (
+                                                    0, 
+                                                    $user_id, 
+                                                    '$issue_date', 
+                                                    '$due_date', 
+                                                    $subtotal, 
+                                                    '" . $conn->real_escape_string($note) . "', 
+                                                    'unpaid', 
+                                                    '$pay_by', 
+                                                    $total_amount, 
+                                                    '$currency', 
+                                                    'pending', 
+                                                    '$product_code',
+                                                    'leads', 
+                                                    $current_user_id,
+                                                    '$mobile',
+                                                    '$custom_note',
+                                                    '$city',
+                                                    '$full_name'
+                                                )";
+                                            
+                                            if ($conn->query($sql)) {
+                                                $processed_count++;
+                                                $processed = true;
+                                                // Mark this lead as processed for this user
+                                                $processed_leads[$lead_key] = true;
+                                                break; // Only insert for one user, not all selected users
+                                            } else {
+                                                $error_count++;
+                                                error_log("Error inserting order: " . $conn->error);
+                                            }
+                                        }
+                                    }
+                                }
+                                fclose($handle);
                             } else {
-                                $errorMsg = "Error recording import in database: " . $stmt->error;
-                                break;
+                                $errorMsg = "Error reading CSV file.";
                             }
+                        } elseif (in_array($file_ext, ['xls', 'xlsx'])) {
+                            // Process Excel file (requires PHPExcel or PhpSpreadsheet)
+                            require_once 'vendor/autoload.php';
                             
-                            $stmt->close();
+                            try {
+                                $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader(ucfirst($file_ext));
+                                $spreadsheet = $reader->load($upload_path);
+                                $worksheet = $spreadsheet->getActiveSheet();
+                                $rows = $worksheet->toArray();
+                                
+                                // Skip header row
+                                array_shift($rows);
+                                
+                                foreach ($rows as $row) {
+                                    if (!empty($row[0])) {
+                                        // Use the first column as unique identifier for deduplication
+                                        $lead_key = md5($row[0] . $row[2]); // Hash of name + phone
+                                        
+                                        // Skip if this lead has already been processed
+                                        if (isset($processed_leads[$lead_key])) {
+                                            continue;
+                                        }
+                                        
+                                        // Extract data from Excel columns
+                                        $full_name = !empty($row[0]) ? $conn->real_escape_string(trim($row[0])) : '';
+                                        $city = !empty($row[1]) ? $conn->real_escape_string(trim($row[1])) : '';
+                                        $mobile = !empty($row[2]) ? $conn->real_escape_string(trim($row[2])) : '';
+                                        $product_code = !empty($row[3]) ? $conn->real_escape_string(trim($row[3])) : '';
+                                        $custom_note = !empty($row[4]) ? $conn->real_escape_string(trim($row[4])) : '';
+                                        
+                                        // Default values
+                                        $subtotal = 0;
+                                        $pay_by = 'cash';
+                                        $currency = 'lkr';
+                                        $total_amount = $subtotal;
+                                        
+                                        $issue_date = date('Y-m-d');
+                                        $due_date = date('Y-m-d', strtotime('+30 days'));
+                                        
+                                        // Process for selected user (distribute leads among users)
+                                        // Only insert for one user, not all selected users
+                                        $user_id = (int)$selected_user_ids[0];
+                                        
+                                        // Rotate through selected users to distribute leads evenly
+                                        if (count($selected_user_ids) > 1) {
+                                            // Move the first element to the end of the array
+                                            $user = array_shift($selected_user_ids);
+                                            $selected_user_ids[] = $user;
+                                        }
+                                        
+                                        // Insert into order_header table
+                                        $sql = "INSERT INTO order_header 
+                                            (customer_id, user_id, issue_date, due_date, subtotal, 
+                                            notes, pay_status, pay_by, total_amount, currency, status, 
+                                            product_code, interface, created_by, mobile, custom_note, city, full_name) 
+                                            VALUES (
+                                                0, 
+                                                $user_id, 
+                                                '$issue_date', 
+                                                '$due_date', 
+                                                $subtotal, 
+                                                '" . $conn->real_escape_string($note) . "', 
+                                                'unpaid', 
+                                                '$pay_by', 
+                                                $total_amount, 
+                                                '$currency', 
+                                                'pending', 
+                                                '$product_code',
+                                                'leads', 
+                                                $current_user_id,
+                                                '$mobile',
+                                                '$custom_note',
+                                                '$city',
+                                                '$full_name'
+                                            )";
+                                        
+                                        if ($conn->query($sql)) {
+                                            $processed_count++;
+                                            $processed = true;
+                                            // Mark this lead as processed
+                                            $processed_leads[$lead_key] = true;
+                                        } else {
+                                            $error_count++;
+                                            error_log("Error inserting order: " . $conn->error);
+                                        }
+                                    }
+                                }
+                            } catch (Exception $e) {
+                                $errorMsg = "Error processing Excel file: " . $e->getMessage();
+                            }
                         }
                         
                         if ($processed) {
-                            $successMsg = "Lead file uploaded successfully! The import process will begin shortly.";
+                            $successMsg = "Lead file uploaded successfully! Processed $processed_count leads. Errors: $error_count";
                             // Clear form fields after successful submission
                             $_POST['note'] = '';
+                        } else {
+                            $errorMsg = "No data was processed from the file.";
                         }
                     } else {
                         $errorMsg = "Error moving uploaded file.";
@@ -203,6 +357,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['import_leads'])) {
             padding: 4px 12px;
             font-size: 0.85rem;
         }
+        .template-info {
+            margin-top: 10px;
+            margin-bottom: 20px;
+            padding: 12px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #0d6efd;
+        }
+        .template-info h5 {
+            color: #0d6efd;
+            margin-bottom: 10px;
+        }
+        .template-info p {
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
     </style>
 </head>
 
@@ -237,13 +408,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['import_leads'])) {
                     
                     <div class="collapse show" id="importForm">
                         <div class="form-container">
+                        
                             <form method="POST" action="lead_upload.php" id="leadImportForm" enctype="multipart/form-data">
                                 <!-- CSRF Token -->
                                 <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
                                 
                                 <!-- Download template link -->
                                 <a href="templates/generate_template.php" class="download-link">
-                                    <i class="fas fa-download"></i> Download Form Template
+                                    <i class="fas fa-download"></i> Download CSV Template
                                 </a>
                                 
                                 <div class="row mb-3">
@@ -258,10 +430,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['import_leads'])) {
                                     </div>
                                     
                                     <!-- Note Field -->
-                                    <div class="col-md-12 mb-3">
-                                        <label for="note" class="form-label">Note</label>
-                                        <textarea class="form-control" id="note" name="note" rows="3"><?php echo isset($_POST['note']) ? htmlspecialchars($_POST['note']) : ''; ?></textarea>
-                                    </div>
+                                     <div class="col-md-12 mb-3">
+                                         <label for="note" class="form-label">Note</label>
+                                           <textarea class="form-control" id="note" name="note" rows="3" style="height: 40px;"><?php echo isset($_POST['note']) ? htmlspecialchars($_POST['note']) : ''; ?></textarea>
+                                           </div>
+
                                 </div>
 
                                 <!-- User Selection with Checkboxes - Improved UI -->
@@ -377,18 +550,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['import_leads'])) {
             checkboxes.forEach(checkbox => {
                 checkbox.checked = (parseInt(checkbox.value) === currentUserId);
             });
-        });
-        
-        // Collapse/expand form section
-        document.querySelector('[data-bs-toggle="collapse"]').addEventListener('click', function(e) {
-            const icon = this.querySelector('i');
-            if (icon.classList.contains('fa-chevron-up')) {
-                icon.classList.remove('fa-chevron-up');
-                icon.classList.add('fa-chevron-down');
-            } else {
-                icon.classList.remove('fa-chevron-down');
-                icon.classList.add('fa-chevron-up');
-            }
         });
     });
     </script>

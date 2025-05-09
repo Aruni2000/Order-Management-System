@@ -25,15 +25,13 @@ if (isset($_POST['update_status']) && isset($_POST['order_id'])) {
     $status_notes = isset($_POST['status_notes']) ? trim($_POST['status_notes']) : '';
 
     // Get lead details for logging
-    $lead_sql = "SELECT c.name FROM order_header i 
-                 LEFT JOIN customers c ON i.customer_id = c.customer_id
-                 WHERE i.order_id = ?";
+    $lead_sql = "SELECT full_name FROM order_header WHERE order_id = ?";
     $stmt = $conn->prepare($lead_sql);
     $stmt->bind_param("s", $order_id);
     $stmt->execute();
     $lead_result = $stmt->get_result();
     $lead_data = $lead_result->fetch_assoc();
-    $customer_name = isset($lead_data['name']) ? $lead_data['name'] : 'Unknown Customer';
+    $customer_name = isset($lead_data['full_name']) ? $lead_data['full_name'] : 'Unknown Customer';
 
     // Start transaction
     $conn->begin_transaction();
@@ -115,15 +113,13 @@ if (isset($_POST['convert_to_order']) && isset($_POST['order_id'])) {
     $user_id = $_SESSION['user_id']; // Current logged-in user ID
 
     // Get lead details for logging
-    $lead_sql = "SELECT c.name FROM order_header i 
-                LEFT JOIN customers c ON i.customer_id = c.customer_id
-                WHERE i.order_id = ?";
+    $lead_sql = "SELECT full_name FROM order_header WHERE order_id = ?";
     $stmt = $conn->prepare($lead_sql);
     $stmt->bind_param("s", $order_id);
     $stmt->execute();
     $lead_result = $stmt->get_result();
     $lead_data = $lead_result->fetch_assoc();
-    $customer_name = isset($lead_data['name']) ? $lead_data['name'] : 'Unknown Customer';
+    $customer_name = isset($lead_data['full_name']) ? $lead_data['full_name'] : 'Unknown Customer';
 
     // Start transaction
     $conn->begin_transaction();
@@ -195,15 +191,13 @@ if (isset($_POST['delete_lead']) && isset($_POST['order_id'])) {
     $user_id = $_SESSION['user_id']; // Current logged-in user ID
 
     // Get lead details for logging
-    $lead_sql = "SELECT c.name FROM order_header i 
-                LEFT JOIN customers c ON i.customer_id = c.customer_id
-                WHERE i.order_id = ?";
+    $lead_sql = "SELECT full_name FROM order_header WHERE order_id = ?";
     $stmt = $conn->prepare($lead_sql);
     $stmt->bind_param("s", $order_id);
     $stmt->execute();
     $lead_result = $stmt->get_result();
     $lead_data = $lead_result->fetch_assoc();
-    $customer_name = isset($lead_data['name']) ? $lead_data['name'] : 'Unknown Customer';
+    $customer_name = isset($lead_data['full_name']) ? $lead_data['full_name'] : 'Unknown Customer';
 
     // Start transaction
     $conn->begin_transaction();
@@ -279,27 +273,23 @@ $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
 $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
 $offset = ($page - 1) * $limit;
 
-// Build basic SQL query with JOIN to customers table
+// Build basic SQL query with direct columns from order_header
 $countSql = "SELECT COUNT(*) as total FROM order_header i 
-             LEFT JOIN customers c ON i.customer_id = c.customer_id
              LEFT JOIN users u ON i.created_by = u.id 
              WHERE i.interface = 'leads'";
 
-$sql = "SELECT i.*, c.name as customer_name, c.phone as phone_number, u.name as creator_name
+$sql = "SELECT i.*, u.name as creator_name
         FROM order_header i 
-        LEFT JOIN customers c ON i.customer_id = c.customer_id
         LEFT JOIN users u ON i.created_by = u.id
         WHERE i.interface = 'leads'";
-
-// Get products for each lead - we'll handle this after fetching leads
 
 // Add search condition if search term is provided
 if (!empty($search)) {
     $searchTerm = $conn->real_escape_string($search);
     $searchCondition = " AND (
                         i.order_id LIKE '%$searchTerm%' OR 
-                        c.name LIKE '%$searchTerm%' OR 
-                        c.phone LIKE '%$searchTerm%' OR
+                        i.full_name LIKE '%$searchTerm%' OR 
+                        i.mobile LIKE '%$searchTerm%' OR
                         i.issue_date LIKE '%$searchTerm%' OR 
                         i.status LIKE '%$searchTerm%' OR
                         u.name LIKE '%$searchTerm%')";
@@ -347,9 +337,7 @@ $result = $conn->query($sql);
                     <br>
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h4>Lead List</h4>
-                        <!-- <a href="add_lead.php" class="btn btn-primary">
-                            <i class="fas fa-plus"></i> Add New Lead
-                        </a> -->
+
                     </div>
 
                     <!-- Display alert messages if any -->
@@ -440,45 +428,19 @@ $result = $conn->query($sql);
                                     </thead>
                                     <tbody>
                                         <?php if ($result && $result->num_rows > 0): ?>
-                                            <?php while ($row = $result->fetch_assoc()): 
-                                                // Fetch products for this lead
-                                                $product_sql = "SELECT p.name, oi.quantity FROM order_items oi 
-                                                               JOIN products p ON oi.product_id = p.product_id 
-                                                               WHERE oi.order_id = ?";
-                                                $stmt = $conn->prepare($product_sql);
-                                                $stmt->bind_param("s", $row['order_id']);
-                                                $stmt->execute();
-                                                $product_result = $stmt->get_result();
-                                                $products = [];
-                                                
-                                                if ($product_result && $product_result->num_rows > 0) {
-                                                    while ($product = $product_result->fetch_assoc()) {
-                                                        $products[] = $product['name'] . ' (' . $product['quantity'] . ')';
-                                                    }
-                                                }
-                                            ?>
+                                            <?php while ($row = $result->fetch_assoc()): ?>
                                                 <tr>
                                                     <td><?php echo isset($row['order_id']) ? htmlspecialchars($row['order_id']) : ''; ?>
                                                     </td>
                                                     <td>
                                                         <?php
-                                                        $customerName = isset($row['customer_name']) ? htmlspecialchars($row['customer_name']) : 'N/A';
-                                                        $customerId = isset($row['customer_id']) ? htmlspecialchars($row['customer_id']) : '';
-                                                        echo $customerName . ($customerId ? " ($customerId)" : "");
+                                                        $customerName = isset($row['full_name']) ? htmlspecialchars($row['full_name']) : 'N/A';
+                                                        echo $customerName;
                                                         ?>
                                                     </td>
-                                                    <td><?php echo isset($row['phone_number']) ? htmlspecialchars($row['phone_number']) : 'N/A'; ?></td>
-                                                    <td>
-                                                        <?php 
-                                                        if (!empty($products)) {
-                                                            echo implode('<br>', array_slice($products, 0, 2));
-                                                            if (count($products) > 2) {
-                                                                echo '<br><span class="badge bg-secondary">+' . (count($products) - 2) . ' more</span>';
-                                                            }
-                                                        } else {
-                                                            echo 'No products';
-                                                        }
-                                                        ?>
+                                                    <td><?php echo isset($row['mobile']) ? htmlspecialchars($row['mobile']) : 'N/A'; ?>
+                                                    </td>
+                                                    <td><?php echo isset($row['product_code']) ? htmlspecialchars($row['product_code']) : 'N/A'; ?>
                                                     </td>
                                                     <td>
                                                         <?php
@@ -502,7 +464,8 @@ $result = $conn->query($sql);
                                                         }
                                                         ?>
                                                     </td>
-                                                    <td><?php echo isset($row['created_at']) ? date('d/m/Y H:i', strtotime($row['created_at'])) : 'N/A'; ?></td>
+                                                    <td><?php echo isset($row['created_at']) ? date('d/m/Y H:i', strtotime($row['created_at'])) : 'N/A'; ?>
+                                                    </td>
                                                     <td>
                                                         <div class="btn-group">
                                                             <a href="#" class="btn btn-sm btn-info text-white view-lead"
@@ -510,10 +473,9 @@ $result = $conn->query($sql);
                                                                 data-id="<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>">
                                                                 <i class="fas fa-eye"></i>
                                                             </a>
-                                                            
-                                                            <a href="edit_lead.php?id=<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>" 
-                                                               class="btn btn-sm btn-warning text-white"
-                                                               title="Edit">
+
+                                                            <a href="edit_lead.php?id=<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>"
+                                                                class="btn btn-sm btn-warning text-white" title="Edit">
                                                                 <i class="fas fa-edit"></i>
                                                             </a>
 
@@ -610,15 +572,16 @@ $result = $conn->query($sql);
                                                 <?php endif; ?>
                                                 <li class="page-item">
                                                     <a class="page-link"
-                                                        href="?page=<?php echo $totalPages; ?>&limit=<?php echo $limit; ?>&search=<?php echo urlencode($search); ?>"><?php echo $totalPages; ?></a>
+                                                        href="?page=<?php echo $totalPages; ?>&limit=<?php echo $limit; ?>&search=<?php echo urlencode($search); ?>"><?php
+                                                                 echo $totalPages; ?></a>
                                                 </li>
                                             <?php endif; ?>
 
                                             <li class="page-item <?php if ($page >= $totalPages)
-                        echo 'disabled'; ?>">
-    <a class="page-link"
-        href="?page=<?php echo $page + 1; ?>&limit=<?php echo $limit; ?>&search=<?php echo urlencode($search); ?>">Next</a>
-</li>
+                                                echo 'disabled'; ?>">
+                                                <a class="page-link"
+                                                    href="?page=<?php echo $page + 1; ?>&limit=<?php echo $limit; ?>&search=<?php echo urlencode($search); ?>">Next</a>
+                                            </li>
                                         </ul>
                                     </nav>
                                 </div>
@@ -627,116 +590,11 @@ $result = $conn->query($sql);
                     </div>
                 </div>
             </main>
-            
+
         </div>
     </div>
 
-    <!-- Update Status Modal -->
-    <div class="modal fade" id="updateStatusModal" tabindex="-1" aria-labelledby="updateStatusModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="updateStatusModalLabel">Update Lead Status</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form method="post">
-                    <div class="modal-body">
-                        <input type="hidden" name="order_id" id="status_order_id">
-                        <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
-                        <input type="hidden" name="limit" value="<?php echo $limit; ?>">
-                        <input type="hidden" name="page" value="<?php echo $page; ?>">
-                        
-                        <div class="mb-3">
-                            <p>You are updating status for lead: <strong id="status_customer_name"></strong></p>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="new_status" class="form-label">New Status</label>
-                            <select class="form-select" id="new_status" name="new_status" required>
-                                <option value="pending">Pending</option>
-                                <option value="dispatch">Dispatched</option>
-                                <option value="done">Complete</option>
-                                <option value="cancel">Canceled</option>
-                            </select>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="status_notes" class="form-label">Notes</label>
-                            <textarea class="form-control" id="status_notes" name="status_notes" rows="3" placeholder="Add notes about this status change..."></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="update_status" class="btn btn-primary">Update Status</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Convert Lead Modal -->
-    <div class="modal fade" id="convertLeadModal" tabindex="-1" aria-labelledby="convertLeadModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="convertLeadModalLabel">Convert Lead to Order</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form method="post">
-                    <div class="modal-body">
-                        <input type="hidden" name="order_id" id="convert_order_id">
-                        <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
-                        <input type="hidden" name="limit" value="<?php echo $limit; ?>">
-                        <input type="hidden" name="page" value="<?php echo $page; ?>">
-                        
-                        <div class="alert alert-info">
-                            <p><i class="fas fa-info-circle"></i> You are about to convert the lead for <strong id="convert_customer_name"></strong> to an order.</p>
-                            <p>This will move the lead to the orders system and mark it as a pending order.</p>
-                        </div>
-                        
-                        <p>Are you sure you want to proceed?</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="convert_to_order" class="btn btn-success">Convert to Order</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Delete Lead Modal -->
-    <div class="modal fade" id="deleteLeadModal" tabindex="-1" aria-labelledby="deleteLeadModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="deleteLeadModalLabel">Delete Lead</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form method="post">
-                    <div class="modal-body">
-                        <input type="hidden" name="order_id" id="delete_order_id">
-                        <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
-                        <input type="hidden" name="limit" value="<?php echo $limit; ?>">
-                        <input type="hidden" name="page" value="<?php echo $page; ?>">
-                        
-                        <div class="alert alert-danger">
-                            <p><i class="fas fa-exclamation-triangle"></i> <strong>Warning:</strong> You are about to delete the lead for <strong id="delete_customer_name"></strong>.</p>
-                            <p>This action cannot be undone. All lead data will be permanently removed.</p>
-                        </div>
-                        
-                        <p>Are you sure you want to delete this lead?</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="delete_lead" class="btn btn-danger">Delete Lead</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- View Lead Modal -->
+    <!-- View Lead Modal - Will be implemented with AJAX to fetch and display lead details -->
     <div class="modal fade" id="viewLeadModal" tabindex="-1" aria-labelledby="viewLeadModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -759,73 +617,201 @@ $result = $conn->query($sql);
         </div>
     </div>
 
+    <!-- Continuation of Update Status Modal -->
+    <div class="modal fade" id="updateStatusModal" tabindex="-1" aria-labelledby="updateStatusModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="updateStatusModalLabel">Update Lead Status</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="updateStatusForm" method="post">
+                        <input type="hidden" name="order_id" id="status_order_id">
+                        <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                        <input type="hidden" name="limit" value="<?php echo $limit; ?>">
+                        <input type="hidden" name="page" value="<?php echo $page; ?>">
+
+                        <div class="mb-3">
+                            <label for="lead_customer" class="form-label">Customer:</label>
+                            <input type="text" class="form-control" id="lead_customer" readonly>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="new_status" class="form-label">Status:</label>
+                            <select class="form-select" id="new_status" name="new_status" required>
+                                <option value="pending">Pending</option>
+                                <option value="done">Complete</option>
+                                <option value="cancel">Canceled</option>
+                                <option value="dispatch">Dispatched</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="status_notes" class="form-label">Notes:</label>
+                            <textarea class="form-control" id="status_notes" name="status_notes" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="updateStatusForm" name="update_status" class="btn btn-primary">Update
+                        Status</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Convert Lead to Order Modal -->
+    <div class="modal fade" id="convertLeadModal" tabindex="-1" aria-labelledby="convertLeadModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="convertLeadModalLabel">Convert Lead to Order</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="convertLeadForm" method="post">
+                        <input type="hidden" name="order_id" id="convert_order_id">
+                        <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                        <input type="hidden" name="limit" value="<?php echo $limit; ?>">
+                        <input type="hidden" name="page" value="<?php echo $page; ?>">
+
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            You are about to convert this lead to an order. This will change its status and make it
+                            available in the orders section.
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Customer:</label>
+                            <input type="text" class="form-control" id="convert_customer" readonly>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="convertLeadForm" name="convert_to_order" class="btn btn-success">Convert
+                        to Order</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Lead Modal -->
+    <div class="modal fade" id="deleteLeadModal" tabindex="-1" aria-labelledby="deleteLeadModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteLeadModalLabel">Delete Lead</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="deleteLeadForm" method="post">
+                        <input type="hidden" name="order_id" id="delete_order_id">
+                        <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                        <input type="hidden" name="limit" value="<?php echo $limit; ?>">
+                        <input type="hidden" name="page" value="<?php echo $page; ?>">
+
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Warning!</strong> You are about to delete this lead. This action cannot be undone.
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Customer:</label>
+                            <input type="text" class="form-control" id="delete_customer" readonly>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="deleteLeadForm" name="delete_lead" class="btn btn-danger">Delete
+                        Lead</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/scripts.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        $(document).ready(function () {
+            // View Lead Details
+            $('.view-lead').click(function (e) {
+                e.preventDefault();
+                var leadId = $(this).data('id');
+                $('#viewLeadModal').modal('show');
+
+                // AJAX call to fetch lead details
+                $.ajax({
+                    url: 'get_lead_details.php',
+                    type: 'GET',
+                    data: { id: leadId },
+                    success: function (response) {
+                        $('#leadDetailsContent').html(response);
+                    },
+                    error: function () {
+                        $('#leadDetailsContent').html('<div class="alert alert-danger">Error loading lead details. Please try again.</div>');
+                    }
+                });
+            });
+
             // Update Status Modal
-            const updateButtons = document.querySelectorAll('.update-status');
-            updateButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const id = this.getAttribute('data-id');
-                    const customer = this.getAttribute('data-customer');
-                    const status = this.getAttribute('data-status');
-                    
-                    document.getElementById('status_order_id').value = id;
-                    document.getElementById('status_customer_name').textContent = customer;
-                    document.getElementById('new_status').value = status;
-                });
+            $('.update-status').click(function () {
+                var orderId = $(this).data('id');
+                var customer = $(this).data('customer');
+                var currentStatus = $(this).data('status');
+
+                $('#status_order_id').val(orderId);
+                $('#lead_customer').val(customer);
+                $('#new_status').val(currentStatus);
             });
-            
+
             // Convert Lead Modal
-            const convertButtons = document.querySelectorAll('.convert-lead');
-            convertButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const id = this.getAttribute('data-id');
-                    const customer = this.getAttribute('data-customer');
-                    
-                    document.getElementById('convert_order_id').value = id;
-                    document.getElementById('convert_customer_name').textContent = customer;
-                });
+            $('.convert-lead').click(function () {
+                var orderId = $(this).data('id');
+                var customer = $(this).data('customer');
+
+                $('#convert_order_id').val(orderId);
+                $('#convert_customer').val(customer);
             });
-            
+
             // Delete Lead Modal
-            const deleteButtons = document.querySelectorAll('.delete-lead');
-            deleteButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const id = this.getAttribute('data-id');
-                    const customer = this.getAttribute('data-customer');
-                    
-                    document.getElementById('delete_order_id').value = id;
-                    document.getElementById('delete_customer_name').textContent = customer;
-                });
+            $('.delete-lead').click(function () {
+                var orderId = $(this).data('id');
+                var customer = $(this).data('customer');
+
+                $('#delete_order_id').val(orderId);
+                $('#delete_customer').val(customer);
             });
-            
-            // View Lead Modal
-            const viewButtons = document.querySelectorAll('.view-lead');
-            viewButtons.forEach(button => {
-                button.addEventListener('click', function(e) {
+
+            // Auto-dismiss alerts after 5 seconds
+            setTimeout(function () {
+                $('.alert-dismissible').alert('close');
+            }, 5000);
+        });
+        // Sidebar Toggle Script
+        document.addEventListener('DOMContentLoaded', function () {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', function (e) {
                     e.preventDefault();
-                    const id = this.getAttribute('data-id');
-                    const modal = new bootstrap.Modal(document.getElementById('viewLeadModal'));
-                    
-                    // Show the modal
-                    modal.show();
-                    
-                    // Fetch lead details with AJAX
-                    fetch('get_lead_details.php?id=' + id)
-                        .then(response => response.text())
-                        .then(data => {
-                            document.getElementById('leadDetailsContent').innerHTML = data;
-                        })
-                        .catch(error => {
-                            document.getElementById('leadDetailsContent').innerHTML = 
-                                '<div class="alert alert-danger">Error loading lead details. Please try again.</div>';
-                            console.error('Error:', error);
-                        });
+                    document.body.classList.toggle('sb-sidenav-toggled');
+                    localStorage.setItem('sb|sidebar-toggle', document.body.classList.contains('sb-sidenav-toggled'));
                 });
-            });
+            }
+
+            // Check for stored state on page load
+            const storedSidebarState = localStorage.getItem('sb|sidebar-toggle');
+            if (storedSidebarState === 'true') {
+                document.body.classList.add('sb-sidenav-toggled');
+            }
         });
     </script>
 </body>
+
 </html>
