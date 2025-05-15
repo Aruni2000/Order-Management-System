@@ -52,7 +52,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt->execute();
         $result = $stmt->get_result();
         
-        if ($result->num_rows > 0) {
+        if ($result->num_rows > 0) {a
             $customer = $result->fetch_assoc();
             $customer_id = $customer['customer_id'];
         } else {

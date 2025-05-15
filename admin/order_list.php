@@ -484,13 +484,7 @@ if ($couriers_result && $couriers_result->num_rows > 0) {
                                                             // Only show cancel button for pending or dispatch orders that are not paid
                                                             if (($status == 'pending' || $status == 'dispatch') && $payStatus != 'paid'):
                                                                 ?>
-                                                                <button type="button" class="btn btn-sm btn-danger cancel-order"
-                                                                    title="Cancel Order"
-                                                                    data-id="<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>"
-                                                                    data-customer="<?php echo htmlspecialchars($customerName); ?>"
-                                                                    data-bs-toggle="modal" data-bs-target="#cancelOrderModal">
-                                                                    <i class="fas fa-times-circle"></i>
-                                                                </button>
+                                                             
                                                             <?php endif; ?>
                                                         </div>
                                                     </td>

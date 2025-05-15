@@ -60,7 +60,80 @@ if ($countResult && $countResult->num_rows > 0) {
 $totalPages = ceil($totalRows / $limit);
 
 $result = $conn->query($sql);
+
+// Process order cancellation
+if (isset($_POST['cancel_order']) && isset($_POST['order_id'])) {
+    $order_id = $_POST['order_id'];
+    $user_id = $_SESSION['user_id']; // Current logged-in user ID
+    $cancellation_reason = isset($_POST['cancellation_reason']) ? trim($_POST['cancellation_reason']) : '';
+
+    // Get order details for logging
+    $order_sql = "SELECT c.name FROM order_header i 
+                   LEFT JOIN customers c ON i.customer_id = c.customer_id
+                   WHERE i.order_id = ?";
+    $stmt = $conn->prepare($order_sql);
+    $stmt->bind_param("s", $order_id);
+    $stmt->execute();
+    $order_result = $stmt->get_result();
+    $order_data = $order_result->fetch_assoc();
+    $customer_name = isset($order_data['name']) ? $order_data['name'] : 'Unknown Customer';
+
+    // Start transaction
+    $conn->begin_transaction();
+
+    try {
+        // 1. Update the order status to 'cancel' and add cancellation reason
+        $update_order_sql = "UPDATE order_header SET status = 'cancel', cancellation_reason = ? WHERE order_id = ?";
+        $stmt = $conn->prepare($update_order_sql);
+        $stmt->bind_param("ss", $cancellation_reason, $order_id);
+        $stmt->execute();
+
+        // 2. Update all related order items to 'cancel' status
+        $update_items_sql = "UPDATE order_items SET status = 'cancel' WHERE order_id = ?";
+        $stmt_items = $conn->prepare($update_items_sql);
+        $stmt_items->bind_param("s", $order_id);
+        $stmt_items->execute();
+
+        // 3. Log the action in user_logs table
+        $action_type = "cancel_order";
+        $details = "Order ID #$order_id for customer ($customer_name) was canceled by user ID #$user_id. Reason: $cancellation_reason";
+
+        $log_sql = "INSERT INTO user_logs (user_id, action_type, inquiry_id, details, created_at) 
+                   VALUES (?, ?, ?, ?, NOW())";
+        $log_stmt = $conn->prepare($log_sql);
+        $log_stmt->bind_param("isss", $user_id, $action_type, $order_id, $details);
+        $log_stmt->execute();
+
+        // Commit the transaction
+        $conn->commit();
+
+        // Set success message
+        $_SESSION['message'] = "Order #$order_id has been canceled successfully.";
+        $_SESSION['message_type'] = "success";
+    } catch (Exception $e) {
+        // Rollback the transaction if something fails
+        $conn->rollback();
+
+        // Set error message
+        $_SESSION['message'] = "Failed to cancel order. Error: " . $e->getMessage();
+        $_SESSION['message_type'] = "danger";
+    }
+
+    // Build the redirect URL with parameters to maintain the current page state
+    $redirect_url = "order_list.php";
+    // [redirect URL building code...]
+    
+    // Ensure the redirect works
+    if (headers_sent()) {
+        echo "<script>window.location.href='$redirect_url';</script>";
+        echo "<noscript><meta http-equiv='refresh' content='0;url=$redirect_url'></noscript>";
+    } else {
+        header("Location: $redirect_url");
+    }
+    exit();
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -218,7 +291,16 @@ $result = $conn->query($sql);
                                                                     data-id="<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>">
                                                                     <i class="fas fa-truck"></i>
                                                                 </a>
+                                                                <a href="#" class="btn btn-sm btn-danger cancel-order"
+                                                                    title="Cancel Order"
+                                                                    data-id="<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>"
+        data-customer="<?php echo htmlspecialchars($customerName); ?>"
+        data-bs-toggle="modal" data-bs-target="#cancelOrderModal">
+        <i class="fas fa-times-circle"></i>
+                                                                </a>
+                                                                
                                                             <?php endif; ?>
+                                                            
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -375,49 +457,112 @@ $result = $conn->query($sql);
             </div>
         </div>
     </div>
-<!-- Modal for Marking Order as Dispatch -->
+<!-- Modified Dispatch Modal -->
 <div class="modal fade" id="dispatchOrderModal" tabindex="-1" aria-labelledby="dispatchOrderModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="dispatchOrderModalLabel">Dispatch Order</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fs-5" id="dispatchOrderModalLabel">Dispatch Order</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="" id="dispatch-order-form">
+            <form action="process_dispatch.php" method="post" id="dispatch-order-form">
                 <input type="hidden" name="order_id" id="dispatch_order_id">
                 <div class="modal-body">
-                    <div class="form-group">
-                        <label for="tracking_number">Tracking Number (Optional)</label>
-                        <input type="text" class="form-control" id="tracking_number" name="tracking_number" placeholder="Enter tracking number">
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Dispatching this order will assign a tracking number and update the order status.
                     </div>
-                    <div class="form-group">
-                        <label for="carrier">Select Courier</label>
-                        <select class="form-control" id="carrier" name="carrier" required>
-                            <option value="">-- Select Courier --</option>
+                    
+                    <div class="mb-3">
+                        <label for="carrier" class="form-label">Courier Service <span class="text-danger">*</span></label>
+                        <select class="form-select" id="carrier" name="carrier" required>
+                            <option value="" selected disabled>Select courier service</option>
                             <?php
-                            // Fetch active couriers from database
+                            // Fetch active couriers from the database
                             $courier_query = "SELECT courier_id, courier_name FROM couriers WHERE status = 'active' ORDER BY courier_name";
                             $courier_result = $conn->query($courier_query);
-                            while($courier = $courier_result->fetch_assoc()): 
+                            
+                            if ($courier_result && $courier_result->num_rows > 0) {
+                                while($courier = $courier_result->fetch_assoc()): 
                             ?>
-                            <option value="<?php echo $courier['courier_id']; ?>"><?php echo $courier['courier_name']; ?></option>
-                            <?php endwhile; ?>
+                                <option value="<?php echo $courier['courier_id']; ?>"><?php echo htmlspecialchars($courier['courier_name']); ?></option>
+                            <?php 
+                                endwhile;
+                            } else {
+                                echo '<option value="" disabled>No couriers available</option>';
+                            }
+                            ?>
                         </select>
+                        <div class="form-text">Select the courier service that will deliver this order</div>
                     </div>
-                    <div class="form-group">
-                        <label for="dispatch_notes">Dispatch Notes</label>
-                        <textarea class="form-control" id="dispatch_notes" name="dispatch_notes" rows="3" placeholder="Add any notes about this dispatch"></textarea>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Tracking Number</label>
+                        <div class="bg-light rounded p-3" id="tracking_number_display">
+                            <span class="text-muted small">Will be generated when you confirm dispatch</span>
+                        </div>
+                        <div class="form-text">An available tracking number will be assigned from the selected courier</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="dispatch_notes" class="form-label">Dispatch Notes</label>
+                        <textarea class="form-control" id="dispatch_notes" name="dispatch_notes" rows="3" 
+                                  placeholder="Enter additional notes about this dispatch (optional)"></textarea>
                     </div>
                 </div>
+                
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Confirm Dispatch</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn btn-success" id="dispatch-submit-btn" disabled>
+                        <i class="fas fa-truck me-1"></i>Confirm Dispatch
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
+<!-- Modal for Cancel Order Confirmation -->
+<div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="cancelOrderModalLabel">Cancel Order</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to cancel this order? This action cannot be undone.</p>
+                <p><strong>Order ID: </strong><span id="cancel_order_id"></span></p>
+                <p><strong>Customer: </strong><span id="cancel_customer_name"></span></p>
+
+                <!-- Add cancellation reason field -->
+                <div class="mb-3">
+                    <label for="cancellation_reason" class="form-label">Cancellation Reason <span
+                            class="text-danger">*</span></label>
+                    <textarea class="form-control" id="cancellation_reason" name="cancellation_reason" rows="3"
+                        placeholder="Please provide a reason for cancellation..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <form method="post" id="cancelOrderForm">
+                    <input type="hidden" name="order_id" id="confirm_cancel_order_id">
+                    <input type="hidden" name="cancellation_reason" id="confirm_cancellation_reason">
+                    <input type="hidden" name="cancel_order" value="1">
+                    <!-- Add hidden fields to preserve current page state -->
+                    <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                    <input type="hidden" name="limit" value="<?php echo $limit; ?>">
+                    <input type="hidden" name="page" value="<?php echo $page; ?>">
+                    <button type="submit" class="btn btn-danger" id="confirm_cancel_btn">Confirm Cancel</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -666,31 +811,112 @@ $result = $conn->query($sql);
             $('#dispatchOrderModal').modal('show');
         });
 
-        // Handle the dispatch form submission
-        $('#dispatch-order-form').submit(function (e) {
-            e.preventDefault();
-            var formData = $(this).serialize();
-
-            $.ajax({
-                url: 'process_dispatch.php', // Your backend file to handle the dispatch
-                type: 'POST',
-                data: formData,
-                dataType: 'json',
-                success: function (response) {
-                    if (response.status == 'success') {
-                        alert('Order has been marked as dispatched successfully!');
-                        $('#dispatchOrderModal').modal('hide');
-                        // Reload the page or update the table
-                        location.reload();
-                    } else {
-                        alert('Failed to dispatch order: ' + response.message);
-                    }
-                },
-                error: function () {
-                    alert('An error occurred while processing your request.');
+       // Script for handling the dispatch functionality
+$(document).ready(function() {
+    // When courier selection changes
+    $('#carrier').change(function() {
+        var courierId = $(this).val();
+        var $trackingDisplay = $('#tracking_number_display');
+        var $submitBtn = $('#dispatch-submit-btn');
+        
+        if (!courierId) {
+            $trackingDisplay.html('<span class="text-muted small">Will be generated when you confirm dispatch</span>');
+            $submitBtn.prop('disabled', true);
+            return;
+        }
+        
+        $trackingDisplay.html('<div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div> Checking available tracking numbers...');
+        $submitBtn.prop('disabled', true);
+        
+        $.ajax({
+            url: 'get_tracking_number.php',
+            type: 'GET',
+            data: { courier_id: courierId },
+            dataType: 'json',
+            success: function(response) {
+                if (response.status === 'success') {
+                    $trackingDisplay.html('<span class="fw-medium">' + response.tracking_number + '</span>' +
+                                         '<div class="text-success small mt-1"><i class="fas fa-check-circle me-1"></i>Tracking number is available</div>');
+                    $submitBtn.prop('disabled', false);
+                } else {
+                    $trackingDisplay.html('<div class="text-danger small"><i class="fas fa-exclamation-triangle me-1"></i>' + 
+                                         response.message + '</div>');
+                    $submitBtn.prop('disabled', true);
                 }
-            });
+            },
+            error: function() {
+                $trackingDisplay.html('<div class="text-danger small"><i class="fas fa-exclamation-triangle me-1"></i>Error loading tracking numbers</div>');
+                $submitBtn.prop('disabled', true);
+            }
         });
+    });
+
+    // Handle the dispatch form submission
+    $('#dispatch-order-form').submit(function(e) {
+        e.preventDefault();
+        var $form = $(this);
+        var $submitBtn = $('#dispatch-submit-btn');
+        var originalBtnText = $submitBtn.html();
+        
+        // Disable the submit button and show loading state
+        $submitBtn.html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...');
+        $submitBtn.prop('disabled', true);
+        
+        $.ajax({
+            url: 'process_dispatch.php',
+            type: 'POST',
+            data: $form.serialize(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Show success message
+                    Swal.fire({
+                        title: 'Success!',
+                        text: 'Order has been dispatched successfully with tracking number: ' + response.tracking_number,
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    }).then(function() {
+                        // Reload the page or redirect
+                        location.reload();
+                    });
+                } else {
+                    // Show error message
+                    Swal.fire({
+                        title: 'Error',
+                        text: response.message,
+                        icon: 'error',
+                        confirmButtonText: 'OK'
+                    });
+                    
+                    // Reset button state
+                    $submitBtn.html(originalBtnText);
+                    $submitBtn.prop('disabled', false);
+                }
+            },
+            error: function() {
+                // Show error message for AJAX failure
+                Swal.fire({
+                    title: 'Error',
+                    text: 'An error occurred while processing your request. Please try again.',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                
+                // Reset button state
+                $submitBtn.html(originalBtnText);
+                $submitBtn.prop('disabled', false);
+            }
+        });
+    });
+    
+    // Reset the form when the modal is closed
+    $('#dispatchOrderModal').on('hidden.bs.modal', function() {
+        $('#dispatch-order-form')[0].reset();
+        $('#tracking_number_display').html('<span class="text-muted small">Will be generated when you confirm dispatch</span>');
+        $('#dispatch-submit-btn').prop('disabled', true);
+    });
+});
+
           // Sidebar Toggle Script
 document.addEventListener('DOMContentLoaded', function() {
     const sidebarToggle = document.getElementById('sidebarToggle');

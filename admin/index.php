@@ -18,9 +18,10 @@ include 'db_connection.php';
 // Include helper functions
 include 'functions.php';
 
-// Process filter parameters if present
-$date_from = isset($_GET['date_from']) && !empty($_GET['date_from']) ? $_GET['date_from'] : '';
-$date_to = isset($_GET['date_to']) && !empty($_GET['date_to']) ? $_GET['date_to'] : '';
+// Set default to today's date if no date parameters are provided
+$today = date('Y-m-d');
+$date_from = isset($_GET['date_from']) && !empty($_GET['date_from']) ? $_GET['date_from'] : $today;
+$date_to = isset($_GET['date_to']) && !empty($_GET['date_to']) ? $_GET['date_to'] : $today;
 
 // Initialize statistics with default values
 $stats = [
@@ -49,15 +50,8 @@ function safeQuery($conn, $query)
     return 0;
 }
 
-// Prepare date conditions for SQL query
-$date_condition = "";
-if (!empty($date_from) && !empty($date_to)) {
-    $date_condition = " AND (issue_date BETWEEN '$date_from 00:00:00' AND '$date_to 23:59:59')";
-} elseif (!empty($date_from)) {
-    $date_condition = " AND issue_date >= '$date_from 00:00:00'";
-} elseif (!empty($date_to)) {
-    $date_condition = " AND issue_date <= '$date_to 23:59:59'";
-}
+// Prepare date conditions for SQL query - always apply date filter
+$date_condition = " AND (issue_date BETWEEN '$date_from 00:00:00' AND '$date_to 23:59:59')";
 
 // Safely fetch all statistics
 $stats['total_users'] = safeQuery($conn, "SELECT COUNT(*) as count FROM users");
@@ -80,39 +74,29 @@ if ($tableExists && $tableExists->num_rows > 0) {
     // Base query for total orders
     $total_orders_query = "SELECT COUNT(*) as count FROM order_header WHERE 1=1";
     
-    // Apply date filter if set
-    if (!empty($date_condition)) {
-        $total_orders_query .= $date_condition;
-    }
+    // Apply date filter
+    $total_orders_query .= $date_condition;
     
     $stats['total_orders'] = safeQuery($conn, $total_orders_query);
     
     // Count for complete orders
     $complete_orders_query = "SELECT COUNT(*) as count FROM order_header WHERE status = 'done'";
-    if (!empty($date_condition)) {
-        $complete_orders_query .= $date_condition;
-    }
+    $complete_orders_query .= $date_condition;
     $stats['complete_orders'] = safeQuery($conn, $complete_orders_query);
     
     // Count for pending orders
     $pending_orders_query = "SELECT COUNT(*) as count FROM order_header WHERE status = 'pending'";
-    if (!empty($date_condition)) {
-        $pending_orders_query .= $date_condition;
-    }
+    $pending_orders_query .= $date_condition;
     $stats['pending_orders'] = safeQuery($conn, $pending_orders_query);
     
     // Count for cancel orders
     $cancel_orders_query = "SELECT COUNT(*) as count FROM order_header WHERE status = 'cancel'";
-    if (!empty($date_condition)) {
-        $cancel_orders_query .= $date_condition;
-    }
+    $cancel_orders_query .= $date_condition;
     $stats['cancel_orders'] = safeQuery($conn, $cancel_orders_query);
     
     // Count for dispatch orders
     $dispatch_orders_query = "SELECT COUNT(*) as count FROM order_header WHERE status = 'dispatch'";
-    if (!empty($date_condition)) {
-        $dispatch_orders_query .= $date_condition;
-    }
+    $dispatch_orders_query .= $date_condition;
     $stats['dispatch_orders'] = safeQuery($conn, $dispatch_orders_query);
 }
 ?>
@@ -361,6 +345,17 @@ if ($tableExists && $tableExists->num_rows > 0) {
                 border: 1px solid var(--border-color);
             }
         }
+        
+        .date-info {
+            font-size: 0.9rem;
+            color: var(--light-text);
+            margin-bottom: 0.5rem;
+            background-color: #f9fafb;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            border: 1px solid var(--border-color);
+            display: inline-block;
+        }
     </style>
 </head>
 
@@ -375,6 +370,17 @@ if ($tableExists && $tableExists->num_rows > 0) {
                 <div class="dashboard-container">
                     <div class="page-header">
                         <h1 class="page-title">Dashboard</h1>
+                        <div class="date-info">
+                            <?php 
+                            if ($date_from == $date_to && $date_from == date('Y-m-d')) {
+                                echo '<i class="fas fa-calendar-day"></i> Showing orders for today (' . date('F d, Y') . ')';
+                            } else if ($date_from == $date_to) {
+                                echo '<i class="fas fa-calendar-day"></i> Showing orders for ' . date('F d, Y', strtotime($date_from));
+                            } else {
+                                echo '<i class="fas fa-calendar-week"></i> Showing orders from ' . date('F d, Y', strtotime($date_from)) . ' to ' . date('F d, Y', strtotime($date_to));
+                            }
+                            ?>
+                        </div>
                     </div>
                     
                     <!-- Filter Bar -->
@@ -397,7 +403,7 @@ if ($tableExists && $tableExists->num_rows > 0) {
                                     <i class="fas fa-search"></i> Search
                                 </button>
                                 <button type="button" class="btn btn-secondary" id="resetButton">
-                                    <i class="fas fa-redo"></i> Reset
+                                    <i class="fas fa-redo"></i> Reset to Today
                                 </button>
                             </div>
                         </form>
@@ -556,11 +562,14 @@ if ($tableExists && $tableExists->num_rows > 0) {
         
         // Reset button functionality
         document.getElementById('resetButton').addEventListener('click', function() {
-            // Clear the input fields
-            document.getElementById('date_from').value = '';
-            document.getElementById('date_to').value = '';
+            // Get today's date in YYYY-MM-DD format
+            const today = new Date().toISOString().split('T')[0];
             
-            // Submit the form to refresh the page with cleared filters
+            // Set the input fields to today's date
+            document.getElementById('date_from').value = today;
+            document.getElementById('date_to').value = today;
+            
+            // Submit the form to refresh the page with today's date as the filter
             document.getElementById('orderFilterForm').submit();
         });
     </script>

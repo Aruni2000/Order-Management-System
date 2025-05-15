@@ -12065,3 +12065,14 @@ body {
     right: 20px;
     z-index: 1050;
 }
+
+#tracking_number_display {
+  min-height: 38px;
+}
+.modal-content {
+  border-radius: 0.5rem;
+}
+.form-control, .form-select {
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+}
