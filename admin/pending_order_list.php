@@ -468,10 +468,10 @@ if (isset($_POST['cancel_order']) && isset($_POST['order_id'])) {
             <form action="process_dispatch.php" method="post" id="dispatch-order-form">
                 <input type="hidden" name="order_id" id="dispatch_order_id">
                 <div class="modal-body">
-                    <div class="alert alert-info mb-3">
+                    <!-- <div class="alert alert-info mb-3">
                         <i class="fas fa-info-circle me-2"></i>
                         Dispatching this order will assign a tracking number and update the order status.
-                    </div>
+                    </div> -->
                     
                     <div class="mb-3">
                         <label for="carrier" class="form-label">Courier Service <span class="text-danger">*</span></label>

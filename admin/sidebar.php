@@ -24,8 +24,8 @@
                         <a class="nav-link" href="order_list.php" id="all-orders-link">All Orders</a>
                         <a class="nav-link" href="pending_order_list.php" id="pending-orders-link">Pending Orders</a>
                         <a class="nav-link" href="dispatch_order_list.php" id="dispatch-orders-link">Dispatch Orders</a>
-                        <a class="nav-link" href="courier_order_list.php" id="dispatch-orders-link">Courier Orders</a>
-                        <!-- <a class="nav-link" href="complete_order_list.php" id="processing-orders-link">Complete Orders </a> -->
+                        <!-- <a class="nav-link" href="courier_order_list.php" id="dispatch-orders-link">Courier Orders</a> -->
+                        <a class="nav-link" href="complete_order_list.php" id="processing-orders-link">Complete Orders </a>
                         <a class="nav-link" href="cancel_order_list.php" id="processing-orders-link">Cancel Orders </a>
                         <!-- <a class="nav-link" href="shipped_orders.php" id="shipped-orders-link">Shipped</a>
         <a class="nav-link" href="delivered_orders.php" id="delivered-orders-link">Delivered</a> -->

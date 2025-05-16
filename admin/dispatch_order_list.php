@@ -225,11 +225,11 @@ $result = $conn->query($sql);
                                                                 data-paystatus="<?php echo $payStatus; ?>">
                                                                 <i class="fas fa-eye"></i>
                                                             </a>
-                                                            <!-- <a href="download_order.php?id=<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>"
-                                                                class="btn btn-sm btn-success text-white" title="Download"
-                                                                target="_blank">
-                                                                <i class="fas fa-download"></i>
-                                                            </a> -->
+                                                            <a href="#" class="btn btn-sm btn-primary text-white mark-paid"
+                                                                    title="Mark as Paid"
+                                                                    data-id="<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>">
+                                                                    <i class=""></i> Paid
+                                                                </a>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -354,6 +354,58 @@ $result = $conn->query($sql);
         </div>
     </div>
 
+     <!-- Modal for Marking Order as Paid -->
+     <div class="modal fade" id="markPaidModal" tabindex="-1" aria-labelledby="markPaidModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="markPaidModalLabel">Payment
+                        Sheet</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="markPaidForm" enctype="multipart/form-data">
+                        <input type="hidden" name="order_id" id="order_id">
+
+                        <div class="mb-4">
+                            <div class="text-center mb-3">
+                                <i class="fas fa-file-order fa-3x text-primary"></i>
+                            </div>
+                            <div class="alert alert-info" role="alert">
+                                <i class="fas fa-info-circle me-2"></i>Please upload your payment slip to mark this
+                                order as paid.
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="payment_slip" class="form-label fw-bold">
+                                <i class="fas fa-upload me-2"></i>Upload Payment Slip
+                            </label>
+                            <input type="file" class="form-control" id="payment_slip" name="payment_slip"
+                                accept=".jpg,.jpeg,.png,.pdf" required>
+                            <div class="form-text mt-2">
+                                <i class="fas fa-file-alt me-1"></i>Supported formats: JPG, JPEG, PNG, PDF
+                            </div>
+                            <div class="form-text">
+                                <i class="fas fa-exclamation-circle me-1"></i>Maximum file size: 2MB
+                            </div>
+                        </div>
+
+                        <div class="text-center mt-4">
+                            <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-1"></i>Cancel
+                            </button>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-check me-1"></i>Mark as Paid
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
@@ -402,7 +454,7 @@ $result = $conn->query($sql);
 
                         // Fetch dispatch details for this order
                         fetchDispatchDetails(orderId);
-                        
+
                         // Fetch payment details for this order
                         fetchPaymentDetails(orderId, payStatus);
 
@@ -427,38 +479,45 @@ $result = $conn->query($sql);
                     printWindow.print();
                 };
             });
-
-            // Function to fetch dispatch details
+            
+            // Function to fetch dispatch details with better error handling
             function fetchDispatchDetails(orderId) {
+                // Show loading indicator
+                $('#dispatchDetails').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading dispatch details...</div>');
+                $('#dispatchInfoSection').show();
+
                 $.ajax({
-                    url: 'get_dispatch_details.php', // You'll need to create this file
+                    url: 'get_dispatch_details.php',
                     type: 'GET',
                     data: { order_id: orderId },
                     dataType: 'json',
                     success: function (data) {
+                        console.log('Dispatch data received:', data); // Debug logging
+
                         if (data.success) {
                             // Create dispatch details HTML
                             var html = '<div class="card">' +
                                 '<div class="card-body">' +
                                 '<div class="row">' +
                                 '<div class="col-md-6">' +
-                                '<p><strong>Courier:</strong> ' + data.courier_name + '</p>' +
+                                '<p><strong>Courier:</strong> ' + (data.courier_name || 'N/A') + '</p>' +
                                 '<p><strong>Tracking Number:</strong> ' + (data.tracking_number || 'N/A') + '</p>' +
                                 '</div>' +
                                 '<div class="col-md-6">' +
-                                '<p><strong>Dispatch Date:</strong> ' + data.dispatch_date + '</p>' +
-                                '<p><strong>Processed By:</strong> ' + data.processed_by + '</p>' +
+                                '<p><strong>Dispatch Date:</strong> ' + (data.dispatch_date || 'N/A') + '</p>' +
+                                '<p><strong>Processed By:</strong> ' + (data.processed_by || 'N/A') + '</p>' +
                                 '</div>' +
                                 '</div>';
-                                
-                            if (data.dispatch_notes && data.dispatch_notes.trim() !== '') {
-                                html += '<div class="row mt-3">' +
-                                    '<div class="col-12">' +
-                                    '<p><strong>Dispatch Notes:</strong></p>' +
-                                    '<div class="alert alert-light">' + data.dispatch_notes + '</div>' +
-                                    '</div>' +
-                                    '</div>';
-                            }
+
+                            // Add dispatch notes section with a proper heading
+                            html += '<div class="row mt-3">' +
+                                '<div class="col-12">' +
+                                '<p><strong>Dispatch Note:</strong></p>' +
+                                '<div class="alert alert-light">' +
+                                (data.dispatch_notes ? data.dispatch_notes : 'No additional notes') +
+                                '</div>' +
+                                '</div>' +
+                                '</div>';
 
                             html += '</div></div>';
 
@@ -466,18 +525,193 @@ $result = $conn->query($sql);
                             $('#dispatchDetails').html(html);
                             $('#dispatchInfoSection').show();
                         } else {
-                            // If there's an error, show an error message
-                            $('#dispatchDetails').html('<div class="alert alert-warning">No dispatch details found for this order.</div>');
-                            $('#dispatchInfoSection').show();
+                            // If there's an error, show the error message from the server
+                            $('#dispatchDetails').html('<div class="alert alert-warning">' +
+                                (data.message || 'No dispatch details found for this order.') + '</div>');
                         }
                     },
-                    error: function () {
-                        // If AJAX fails, show an error
-                        $('#dispatchDetails').html('<div class="alert alert-danger">Failed to load dispatch details.</div>');
-                        $('#dispatchInfoSection').show();
+                    error: function (xhr, status, error) {
+                        // Enhanced error reporting
+                        console.error('AJAX Error:', status, error);
+                        console.log('Response:', xhr.responseText);
+
+                        // Try to parse response in case it contains useful information
+                        var errorMessage = 'Failed to load dispatch details.';
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            if (response && response.message) {
+                                errorMessage = response.message;
+                            }
+                        } catch (e) {
+                            // If response isn't valid JSON, show the raw response
+                            if (xhr.responseText && xhr.responseText.length < 200) {
+                                errorMessage = 'Server response: ' + xhr.responseText;
+                            }
+                        }
+
+                        // Display error to user
+                        $('#dispatchDetails').html('<div class="alert alert-danger">' + errorMessage + '</div>');
                     }
                 });
             }
+
+
+              // Function to fetch payment details
+              function fetchPaymentDetails(orderId, payStatus) {
+                if (payStatus === 'paid') {
+                    $.ajax({
+                        url: 'get_payment_details.php',
+                        type: 'GET',
+                        data: { order_id: orderId },
+                        success: function (data) {
+                            if (data.success) {
+                                // Create payment details HTML
+                                var html = '<div class="card">' +
+                                    '<div class="card-body">' +
+                                    '<div class="row">' +
+                                    '<div class="col-md-6">' +
+                                    '<p><strong>Payment Method:</strong> ' + data.payment_method + '</p>' +
+                                    '<p><strong>Amount Paid:</strong> ' + data.amount_paid + '</p>' +
+                                    '</div>' +
+                                    '<div class="col-md-6">' +
+                                    '<p><strong>Payment Date:</strong> ' + data.payment_date + '</p>' +
+                                    '<p><strong>Processed By:</strong> ' + data.processed_by + '</p>' +
+                                    '</div>' +
+                                    '</div>';
+
+                                // Add payment slip if available
+                                if (data.slip) {
+                                    html += '<div class="text-center mt-3">' +
+                                        '<p><strong>Payment Slip:</strong></p>' +
+                                        '<a href="uploads/payments/' + data.slip + '" target="_blank">' +
+                                        '<img src="uploads/payments/' + data.slip + '" class="img-fluid" style="max-height: 200px;">' +
+                                        '</a>' +
+                                        '</div>';
+                                }
+
+                                html += '</div></div>';
+
+                                // Show the payment section
+                                $('#paymentDetails').html(html);
+                                $('#paymentInfoSection').show();
+                            } else {
+                                // If there's an error, show an error message
+                                $('#paymentDetails').html('<div class="alert alert-warning">No payment details found for this order.</div>');
+                                $('#paymentInfoSection').show();
+                            }
+                        },
+                        error: function () {
+                            // If AJAX fails, show an error
+                            $('#paymentDetails').html('<div class="alert alert-danger">Failed to load payment details.</div>');
+                            $('#paymentInfoSection').show();
+                        }
+                    });
+                } else {
+                    // If order is not paid, show appropriate message
+                    $('#paymentDetails').html('<div class="alert alert-info">This order has not been paid yet.</div>');
+                    $('#paymentInfoSection').show();
+                }
+            }
+
+            // Handle "Paid" button click
+            $('.mark-paid').click(function (e) {
+                e.preventDefault(); // Prevent default link behavior
+
+                var orderId = $(this).data('id'); // Get the order ID
+
+                // Get additional information about the order
+                var orderRow = $(this).closest('tr');
+                var orderAmount = orderRow.find('td:eq(4)').text().trim();
+                var customerName = orderRow.find('td:eq(1)').text().trim();
+
+                // Directly set the order ID in the form
+                $('#order_id').val(orderId);
+
+                // Optionally, you could update the modal with order details
+                $('#markPaidModalLabel').html('<i class="fas fa-money-bill-wave me-2"></i>Payment Sheet - Order #' + orderId);
+
+                // Show the modal
+                $('#markPaidModal').modal('show');
+            });
+
+            // Handle form submission with validation
+            $('#markPaidForm').submit(function (e) {
+                e.preventDefault(); // Prevent default form submission
+
+                // Simple validation
+                var fileInput = $('#payment_slip')[0];
+
+                if (fileInput.files.length === 0) {
+                    alert('Please select a file to upload.');
+                    return false;
+                }
+
+                var fileSize = fileInput.files[0].size / 1024 / 1024; // in MB
+                if (fileSize > 2) {
+                    alert('File size exceeds 2MB. Please choose a smaller file.');
+                    return false;
+                }
+
+                // Show loading state
+                var submitBtn = $(this).find('button[type="submit"]');
+                var originalText = submitBtn.html();
+                submitBtn.html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...');
+                submitBtn.prop('disabled', true);
+
+                var formData = new FormData(this);
+
+                $.ajax({
+                    url: 'mark_paid.php',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function (response) {
+                        // Check if SweetAlert2 is available
+                        if (typeof Swal !== 'undefined') {
+                            // Show success message with SweetAlert2
+                            Swal.fire({
+                                title: 'Success!',
+                                text: 'Order has been marked as paid successfully.',
+                                icon: 'success',
+                                confirmButtonText: 'OK'
+                            }).then((result) => {
+                                $('#markPaidModal').modal('hide');
+                                location.reload(); // Reload the page to reflect changes
+                            });
+                        } else {
+                            // Fallback to alert
+                            alert('Order marked as paid successfully.');
+                            $('#markPaidModal').modal('hide');
+                            location.reload(); // Reload the page to reflect changes
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        // Reset button state
+                        submitBtn.html(originalText);
+                        submitBtn.prop('disabled', false);
+
+                        if (typeof Swal !== 'undefined') {
+                            // Show error message with SweetAlert2
+                            Swal.fire({
+                                title: 'Error!',
+                                text: 'Failed to mark order as paid. Please try again.',
+                                icon: 'error',
+                                confirmButtonText: 'OK'
+                            });
+                        } else {
+                            // Fallback to alert
+                            alert('Failed to mark order as paid.');
+                        }
+                    }
+                });
+            });
+            
+            // Reset form when modal is hidden
+            $('#markPaidModal').on('hidden.bs.modal', function () {
+                $('#markPaidForm')[0].reset();
+            });
+
 
             // Function to fetch payment details
             function fetchPaymentDetails(orderId, payStatus) {
@@ -554,23 +788,23 @@ $result = $conn->query($sql);
                 $(".alert-dismissible").fadeOut("slow");
             }, 5000);
         });
-          // Sidebar Toggle Script
-document.addEventListener('DOMContentLoaded', function() {
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', function(e) {
-            e.preventDefault();
-            document.body.classList.toggle('sb-sidenav-toggled');
-            localStorage.setItem('sb|sidebar-toggle', document.body.classList.contains('sb-sidenav-toggled'));
-        });
-    }
+        // Sidebar Toggle Script
+        document.addEventListener('DOMContentLoaded', function () {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.body.classList.toggle('sb-sidenav-toggled');
+                    localStorage.setItem('sb|sidebar-toggle', document.body.classList.contains('sb-sidenav-toggled'));
+                });
+            }
 
-    // Check for stored state on page load
-    const storedSidebarState = localStorage.getItem('sb|sidebar-toggle');
-    if (storedSidebarState === 'true') {
-        document.body.classList.add('sb-sidenav-toggled');
-    }
-});
+            // Check for stored state on page load
+            const storedSidebarState = localStorage.getItem('sb|sidebar-toggle');
+            if (storedSidebarState === 'true') {
+                document.body.classList.add('sb-sidenav-toggled');
+            }
+        });
     </script>
 </body>
 
