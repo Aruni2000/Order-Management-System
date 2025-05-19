@@ -484,7 +484,7 @@ if ($couriers_result && $couriers_result->num_rows > 0) {
                                                             // Only show cancel button for pending or dispatch orders that are not paid
                                                             if (($status == 'pending' || $status == 'dispatch') && $payStatus != 'paid'):
                                                                 ?>
-                                                             
+
                                                             <?php endif; ?>
                                                         </div>
                                                     </td>
@@ -873,23 +873,25 @@ if ($couriers_result && $couriers_result->num_rows > 0) {
                 $(".alert-dismissible").fadeOut("slow");
             }, 5000);
         });
-          // Sidebar Toggle Script
-document.addEventListener('DOMContentLoaded', function() {
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', function(e) {
-            e.preventDefault();
-            document.body.classList.toggle('sb-sidenav-toggled');
-            localStorage.setItem('sb|sidebar-toggle', document.body.classList.contains('sb-sidenav-toggled'));
-        });
-    }
+        // Sidebar Toggle Script
+        document.addEventListener('DOMContentLoaded', function () {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.body.classList.toggle('sb-sidenav-toggled');
+                    localStorage.setItem('sb|sidebar-toggle', document.body.classList.contains('sb-sidenav-toggled'));
+                });
+            }
 
-    // Check for stored state on page load
-    const storedSidebarState = localStorage.getItem('sb|sidebar-toggle');
-    if (storedSidebarState === 'true') {
-        document.body.classList.add('sb-sidenav-toggled');
-    }
-});
+            // Check for stored state on page load
+            const storedSidebarState = localStorage.getItem('sb|sidebar-toggle');
+            if (storedSidebarState === 'true') {
+                document.body.classList.add('sb-sidenav-toggled');
+            }
+        });
+        
     </script>
 </body>
+
 </html>

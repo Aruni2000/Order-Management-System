@@ -50,7 +50,7 @@ $totalRows = 0;
 if ($countResult && $countResult->num_rows > 0) {
     $totalRows = $countResult->fetch_assoc()['total'];
 }
-$totalPages = ceil($totalRows / $limit);
+$totalPages = ceil($totalRows / $limit);0
 
 $result = $conn->query($sql);
 

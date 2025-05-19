@@ -17,6 +17,94 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
 include 'db_connection.php';
 include 'functions.php'; // Include helper functions
 
+// Process order cancellation
+if (isset($_POST['cancel_order']) && isset($_POST['order_id'])) {
+    $order_id = $_POST['order_id'];
+    $user_id = $_SESSION['user_id']; // Current logged-in user ID
+    $cancellation_reason = isset($_POST['cancellation_reason']) ? trim($_POST['cancellation_reason']) : '';
+
+    // Get order details for logging
+    $order_sql = "SELECT c.name FROM order_header i 
+                   LEFT JOIN customers c ON i.customer_id = c.customer_id
+                   WHERE i.order_id = ?";
+    $stmt = $conn->prepare($order_sql);
+    $stmt->bind_param("s", $order_id);
+    $stmt->execute();
+    $order_result = $stmt->get_result();
+    $order_data = $order_result->fetch_assoc();
+    $customer_name = isset($order_data['name']) ? $order_data['name'] : 'Unknown Customer';
+
+    // Start transaction
+    $conn->begin_transaction();
+
+    try {
+        // 1. Update the order status to 'cancel' and add cancellation reason
+        $update_order_sql = "UPDATE order_header SET status = 'cancel', cancellation_reason = ? WHERE order_id = ?";
+        $stmt = $conn->prepare($update_order_sql);
+        $stmt->bind_param("ss", $cancellation_reason, $order_id);
+        $stmt->execute();
+
+        // 2. Update all related order items to 'cancel' status
+        $update_items_sql = "UPDATE order_items SET status = 'cancel' WHERE order_id = ?";
+        $stmt_items = $conn->prepare($update_items_sql);
+        $stmt_items->bind_param("s", $order_id);
+        $stmt_items->execute();
+
+        // 3. Log the action in user_logs table
+        $action_type = "cancel_order";
+        $details = "Order ID #$order_id for customer ($customer_name) was canceled by user ID #$user_id. Reason: $cancellation_reason";
+
+        $log_sql = "INSERT INTO user_logs (user_id, action_type, inquiry_id, details, created_at) 
+                   VALUES (?, ?, ?, ?, NOW())";
+        $log_stmt = $conn->prepare($log_sql);
+        $log_stmt->bind_param("isss", $user_id, $action_type, $order_id, $details);
+        $log_stmt->execute();
+
+        // Commit the transaction
+        $conn->commit();
+
+        // Set success message
+        $_SESSION['message'] = "Order #$order_id has been canceled successfully.";
+        $_SESSION['message_type'] = "success";
+    } catch (Exception $e) {
+        // Rollback the transaction if something fails
+        $conn->rollback();
+
+        // Set error message
+        $_SESSION['message'] = "Failed to cancel order. Error: " . $e->getMessage();
+        $_SESSION['message_type'] = "danger";
+    }
+
+    // Build the redirect URL with parameters to maintain the current page state
+    $redirect_url = "dispatch_order_list.php";
+    if (!empty($search)) {
+        $redirect_url .= "?search=" . urlencode($search);
+        if (isset($limit)) {
+            $redirect_url .= "&limit=" . $limit;
+        }
+        if (isset($page)) {
+            $redirect_url .= "&page=" . $page;
+        }
+    } else if (isset($limit) || isset($page)) {
+        $redirect_url .= "?";
+        if (isset($limit)) {
+            $redirect_url .= "limit=" . $limit;
+        }
+        if (isset($page)) {
+            $redirect_url .= (isset($limit) ? "&" : "") . "page=" . $page;
+        }
+    }
+
+    // Ensure the redirect works
+    if (headers_sent()) {
+        echo "<script>window.location.href='$redirect_url';</script>";
+        echo "<noscript><meta http-equiv='refresh' content='0;url=$redirect_url'></noscript>";
+    } else {
+        header("Location: $redirect_url");
+    }
+    exit();
+}
+
 // Initialize search parameters
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
@@ -101,6 +189,21 @@ $result = $conn->query($sql);
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h4>Dispatch Orders</h4>
                     </div>
+
+                    <!-- Display alerts for cancel order operation -->
+                    <?php if (isset($_SESSION['message']) && isset($_SESSION['message_type'])): ?>
+                        <div class="alert alert-<?php echo $_SESSION['message_type']; ?> alert-dismissible fade show"
+                            role="alert">
+                            <?php echo $_SESSION['message']; ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        <?php
+                        // Clear the message after displaying
+                        unset($_SESSION['message']);
+                        unset($_SESSION['message_type']);
+                        ?>
+                    <?php endif; ?>
+
                     <div class="card">
                         <div class="card-body">
                             <div class="row mb-3">
@@ -113,7 +216,7 @@ $result = $conn->query($sql);
                                             <i class="fas fa-search"></i>
                                         </button>
                                         <?php if (!empty($search)): ?>
-                                            <a href="dispatch_orders.php" class="btn btn-outline-secondary ms-2">
+                                            <a href="dispatch_order_list.php" class="btn btn-outline-secondary ms-2">
                                                 <i class="fas fa-times"></i> Clear
                                             </a>
                                         <?php endif; ?>
@@ -217,6 +320,7 @@ $result = $conn->query($sql);
                                                             <span class="badge bg-danger">Unpaid</span>
                                                         <?php endif; ?>
                                                     </td>
+
                                                     <td>
                                                         <div class="btn-group">
                                                             <a href="#" class="btn btn-sm btn-info text-white view-order"
@@ -225,11 +329,21 @@ $result = $conn->query($sql);
                                                                 data-paystatus="<?php echo $payStatus; ?>">
                                                                 <i class="fas fa-eye"></i>
                                                             </a>
-                                                            <a href="#" class="btn btn-sm btn-primary text-white mark-paid"
+                                                            <?php if ($payStatus != 'paid'): ?>
+                                                                <a href="#" class="btn btn-sm btn-primary text-white mark-paid"
                                                                     title="Mark as Paid"
                                                                     data-id="<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>">
                                                                     <i class=""></i> Paid
                                                                 </a>
+                                                            <?php endif; ?>
+                                                            <?php if ($payStatus != 'paid'): // Only show cancel button if order is not paid ?>
+                                                                <a href="#" class="btn btn-sm btn-danger cancel-order"
+                                                                    title="Cancel Order"
+                                                                    data-id="<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>"
+                                                                    data-customer="<?php echo $customerName; ?>">
+                                                                    <i class="fas fa-times-circle"></i>
+                                                                </a>
+                                                            <?php endif; ?>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -354,13 +468,12 @@ $result = $conn->query($sql);
         </div>
     </div>
 
-     <!-- Modal for Marking Order as Paid -->
-     <div class="modal fade" id="markPaidModal" tabindex="-1" aria-labelledby="markPaidModalLabel" aria-hidden="true">
+    <!-- Modal for Marking Order as Paid -->
+    <div class="modal fade" id="markPaidModal" tabindex="-1" aria-labelledby="markPaidModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title" id="markPaidModalLabel">Payment
-                        Sheet</h5>
+                    <h5 class="modal-title" id="markPaidModalLabel">Payment Sheet</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                         aria-label="Close"></button>
                 </div>
@@ -400,6 +513,46 @@ $result = $conn->query($sql);
                                 <i class="fas fa-check me-1"></i>Mark as Paid
                             </button>
                         </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Cancel Order Confirmation -->
+    <div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="cancelOrderModalLabel">Cancel Order</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to cancel this order? This action cannot be undone.</p>
+                    <p><strong>Order ID: </strong><span id="cancel_order_id"></span></p>
+                    <p><strong>Customer: </strong><span id="cancel_customer_name"></span></p>
+
+                    <!-- Add cancellation reason field -->
+                    <div class="mb-3">
+                        <label for="cancellation_reason" class="form-label">Cancellation Reason <span
+                                class="text-danger">*</span></label>
+                        <textarea class="form-control" id="cancellation_reason" name="cancellation_reason" rows="3"
+                            placeholder="Please provide a reason for cancellation..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <form method="post" id="cancelOrderForm">
+                        <input type="hidden" name="order_id" id="confirm_cancel_order_id">
+                        <input type="hidden" name="cancellation_reason" id="confirm_cancellation_reason">
+                        <input type="hidden" name="cancel_order" value="1">
+                        <!-- Add hidden fields to preserve current page state -->
+                        <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                        <input type="hidden" name="limit" value="<?php echo $limit; ?>">
+                        <input type="hidden" name="page" value="<?php echo $page; ?>">
+                        <button type="submit" class="btn btn-danger" id="confirm_cancel_btn">Confirm Cancel</button>
                     </form>
                 </div>
             </div>
@@ -448,364 +601,197 @@ $result = $conn->query($sql);
                         var printButton = '<div class="text-end mt-3">' +
                             '<button type="button" class="btn btn-primary print-order" ' +
                             'data-id="' + orderId + '">' +
-                            '<i class="fas fa-print me-1"></i>Print Order</button>' +
+                            '<i class="fas fa-print me-1"></i>Print Order</button>'
+                        '<i class="fas fa-print me-1"></i>Print Order</button>' +
                             '</div>';
                         $('#orderDetails').append(printButton);
 
-                        // Fetch dispatch details for this order
-                        fetchDispatchDetails(orderId);
+                        // Fetch dispatch information
+                        $.ajax({
+                            url: 'get_dispatch_info.php',
+                            type: 'GET',
+                            data: { order_id: orderId },
+                            dataType: 'json',
+                            success: function (dispatchData) {
+                                if (dispatchData && dispatchData.success) {
+                                    // Populate dispatch details
+                                    var dispatchHtml = '<div class="row">';
+                                    dispatchHtml += '<div class="col-md-6">';
+                                    dispatchHtml += '<p><strong>Courier:</strong> ' + (dispatchData.courier_name || 'N/A') + '</p>';
+                                    dispatchHtml += '<p><strong>Tracking Number:</strong> ' + (dispatchData.tracking_number || 'N/A') + '</p>';
+                                    dispatchHtml += '</div>';
+                                    dispatchHtml += '<div class="col-md-6">';
+                                    dispatchHtml += '<p><strong>Dispatch Date:</strong> ' + (dispatchData.dispatch_date || 'N/A') + '</p>';
+                                    dispatchHtml += '<p><strong>Expected Delivery:</strong> ' + (dispatchData.expected_delivery || 'N/A') + '</p>';
+                                    dispatchHtml += '</div>';
+                                    dispatchHtml += '</div>';
 
-                        // Fetch payment details for this order
-                        fetchPaymentDetails(orderId, payStatus);
+                                    if (dispatchData.notes) {
+                                        dispatchHtml += '<div class="row mt-2">';
+                                        dispatchHtml += '<div class="col-12">';
+                                        dispatchHtml += '<p><strong>Dispatch Notes:</strong></p>';
+                                        dispatchHtml += '<p class="border p-2 bg-light">' + dispatchData.notes + '</p>';
+                                        dispatchHtml += '</div>';
+                                        dispatchHtml += '</div>';
+                                    }
 
-                        // Show the modal
-                        $('#viewOrderModal').modal('show');
+                                    $('#dispatchDetails').html(dispatchHtml);
+                                    $('#dispatchInfoSection').show();
+                                }
+                            },
+                            error: function () {
+                                $('#dispatchDetails').html('<div class="alert alert-warning">Failed to load dispatch information.</div>');
+                                $('#dispatchInfoSection').show();
+                            }
+                        });
+
+                        // If order is paid, fetch payment information
+                        if (payStatus === 'paid') {
+                            $.ajax({
+                                url: 'get_payment_info.php',
+                                type: 'GET',
+                                data: { order_id: orderId },
+                                dataType: 'json',
+                                success: function (paymentData) {
+                                    if (paymentData && paymentData.success) {
+                                        // Populate payment details
+                                        var paymentHtml = '<div class="row">';
+                                        paymentHtml += '<div class="col-md-6">';
+                                        paymentHtml += '<p><strong>Payment ID:</strong> ' + (paymentData.payment_id || 'N/A') + '</p>';
+                                        paymentHtml += '<p><strong>Payment Method:</strong> ' + (paymentData.payment_method || 'N/A') + '</p>';
+                                        paymentHtml += '<p><strong>Amount Paid:</strong> ' + (paymentData.currency_symbol || 'Rs') + ' ' + (paymentData.amount_paid || '0.00') + '</p>';
+                                        paymentHtml += '</div>';
+                                        paymentHtml += '<div class="col-md-6">';
+                                        paymentHtml += '<p><strong>Payment Date:</strong> ' + (paymentData.payment_date || 'N/A') + '</p>';
+                                        paymentHtml += '<p><strong>Processed By:</strong> ' + (paymentData.processed_by || 'N/A') + '</p>';
+                                        paymentHtml += '</div>';
+                                        paymentHtml += '</div>';
+
+                                        if (paymentData.payment_slip) {
+                                            paymentHtml += '<div class="row mt-3">';
+                                            paymentHtml += '<div class="col-12">';
+                                            paymentHtml += '<p><strong>Payment Slip:</strong></p>';
+                                            paymentHtml += '<div class="text-center">';
+                                            paymentHtml += '<a href="' + paymentData.payment_slip + '" target="_blank" class="btn btn-sm btn-outline-primary">';
+                                            paymentHtml += '<i class="fas fa-file-image me-1"></i>View Payment Slip</a>';
+                                            paymentHtml += '</div>';
+                                            paymentHtml += '</div>';
+                                            paymentHtml += '</div>';
+                                        }
+
+                                        $('#paymentDetails').html(paymentHtml);
+                                        $('#paymentInfoSection').show();
+                                    }
+                                },
+                                error: function () {
+                                    $('#paymentDetails').html('<div class="alert alert-warning">Failed to load payment information.</div>');
+                                    $('#paymentInfoSection').show();
+                                }
+                            });
+                        }
                     },
                     error: function () {
-                        $('#orderDetails').html('Failed to load order details.');
+                        // Display error message if AJAX request fails
+                        $('#orderDetails').html('<div class="alert alert-danger">Failed to load order details. Please try again.</div>');
                     }
                 });
-            });
-
-            // Handle Print Order button click
-            $(document).on('click', '.print-order', function () {
-                var orderId = $(this).data('id');
-
-                // Open the download_order.php in a new window for printing
-                var printWindow = window.open('download_order.php?id=' + orderId + '&format=html&print=true', '_blank');
-
-                // Trigger print when the new window is loaded
-                printWindow.onload = function () {
-                    printWindow.print();
-                };
-            });
-            
-            // Function to fetch dispatch details with better error handling
-            function fetchDispatchDetails(orderId) {
-                // Show loading indicator
-                $('#dispatchDetails').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading dispatch details...</div>');
-                $('#dispatchInfoSection').show();
-
-                $.ajax({
-                    url: 'get_dispatch_details.php',
-                    type: 'GET',
-                    data: { order_id: orderId },
-                    dataType: 'json',
-                    success: function (data) {
-                        console.log('Dispatch data received:', data); // Debug logging
-
-                        if (data.success) {
-                            // Create dispatch details HTML
-                            var html = '<div class="card">' +
-                                '<div class="card-body">' +
-                                '<div class="row">' +
-                                '<div class="col-md-6">' +
-                                '<p><strong>Courier:</strong> ' + (data.courier_name || 'N/A') + '</p>' +
-                                '<p><strong>Tracking Number:</strong> ' + (data.tracking_number || 'N/A') + '</p>' +
-                                '</div>' +
-                                '<div class="col-md-6">' +
-                                '<p><strong>Dispatch Date:</strong> ' + (data.dispatch_date || 'N/A') + '</p>' +
-                                '<p><strong>Processed By:</strong> ' + (data.processed_by || 'N/A') + '</p>' +
-                                '</div>' +
-                                '</div>';
-
-                            // Add dispatch notes section with a proper heading
-                            html += '<div class="row mt-3">' +
-                                '<div class="col-12">' +
-                                '<p><strong>Dispatch Note:</strong></p>' +
-                                '<div class="alert alert-light">' +
-                                (data.dispatch_notes ? data.dispatch_notes : 'No additional notes') +
-                                '</div>' +
-                                '</div>' +
-                                '</div>';
-
-                            html += '</div></div>';
-
-                            // Show the dispatch section
-                            $('#dispatchDetails').html(html);
-                            $('#dispatchInfoSection').show();
-                        } else {
-                            // If there's an error, show the error message from the server
-                            $('#dispatchDetails').html('<div class="alert alert-warning">' +
-                                (data.message || 'No dispatch details found for this order.') + '</div>');
-                        }
-                    },
-                    error: function (xhr, status, error) {
-                        // Enhanced error reporting
-                        console.error('AJAX Error:', status, error);
-                        console.log('Response:', xhr.responseText);
-
-                        // Try to parse response in case it contains useful information
-                        var errorMessage = 'Failed to load dispatch details.';
-                        try {
-                            var response = JSON.parse(xhr.responseText);
-                            if (response && response.message) {
-                                errorMessage = response.message;
-                            }
-                        } catch (e) {
-                            // If response isn't valid JSON, show the raw response
-                            if (xhr.responseText && xhr.responseText.length < 200) {
-                                errorMessage = 'Server response: ' + xhr.responseText;
-                            }
-                        }
-
-                        // Display error to user
-                        $('#dispatchDetails').html('<div class="alert alert-danger">' + errorMessage + '</div>');
-                    }
-                });
-            }
-
-
-              // Function to fetch payment details
-              function fetchPaymentDetails(orderId, payStatus) {
-                if (payStatus === 'paid') {
-                    $.ajax({
-                        url: 'get_payment_details.php',
-                        type: 'GET',
-                        data: { order_id: orderId },
-                        success: function (data) {
-                            if (data.success) {
-                                // Create payment details HTML
-                                var html = '<div class="card">' +
-                                    '<div class="card-body">' +
-                                    '<div class="row">' +
-                                    '<div class="col-md-6">' +
-                                    '<p><strong>Payment Method:</strong> ' + data.payment_method + '</p>' +
-                                    '<p><strong>Amount Paid:</strong> ' + data.amount_paid + '</p>' +
-                                    '</div>' +
-                                    '<div class="col-md-6">' +
-                                    '<p><strong>Payment Date:</strong> ' + data.payment_date + '</p>' +
-                                    '<p><strong>Processed By:</strong> ' + data.processed_by + '</p>' +
-                                    '</div>' +
-                                    '</div>';
-
-                                // Add payment slip if available
-                                if (data.slip) {
-                                    html += '<div class="text-center mt-3">' +
-                                        '<p><strong>Payment Slip:</strong></p>' +
-                                        '<a href="uploads/payments/' + data.slip + '" target="_blank">' +
-                                        '<img src="uploads/payments/' + data.slip + '" class="img-fluid" style="max-height: 200px;">' +
-                                        '</a>' +
-                                        '</div>';
-                                }
-
-                                html += '</div></div>';
-
-                                // Show the payment section
-                                $('#paymentDetails').html(html);
-                                $('#paymentInfoSection').show();
-                            } else {
-                                // If there's an error, show an error message
-                                $('#paymentDetails').html('<div class="alert alert-warning">No payment details found for this order.</div>');
-                                $('#paymentInfoSection').show();
-                            }
-                        },
-                        error: function () {
-                            // If AJAX fails, show an error
-                            $('#paymentDetails').html('<div class="alert alert-danger">Failed to load payment details.</div>');
-                            $('#paymentInfoSection').show();
-                        }
-                    });
-                } else {
-                    // If order is not paid, show appropriate message
-                    $('#paymentDetails').html('<div class="alert alert-info">This order has not been paid yet.</div>');
-                    $('#paymentInfoSection').show();
-                }
-            }
-
-            // Handle "Paid" button click
-            $('.mark-paid').click(function (e) {
-                e.preventDefault(); // Prevent default link behavior
-
-                var orderId = $(this).data('id'); // Get the order ID
-
-                // Get additional information about the order
-                var orderRow = $(this).closest('tr');
-                var orderAmount = orderRow.find('td:eq(4)').text().trim();
-                var customerName = orderRow.find('td:eq(1)').text().trim();
-
-                // Directly set the order ID in the form
-                $('#order_id').val(orderId);
-
-                // Optionally, you could update the modal with order details
-                $('#markPaidModalLabel').html('<i class="fas fa-money-bill-wave me-2"></i>Payment Sheet - Order #' + orderId);
 
                 // Show the modal
+                $('#viewOrderModal').modal('show');
+            });
+
+            // Handle "Print Order" button click
+            $(document).on('click', '.print-order', function () {
+                var orderId = $(this).data('id');
+                // Redirect to download_order.php for printing/downloading
+                window.open('download_order.php?id=' + orderId, '_blank');
+            });
+
+            // Handle "Mark as Paid" button click
+            $('.mark-paid').click(function (e) {
+                e.preventDefault();
+                var orderId = $(this).data('id');
+                $('#order_id').val(orderId);
                 $('#markPaidModal').modal('show');
             });
 
-            // Handle form submission with validation
+            // Handle form submission for marking an order as paid
             $('#markPaidForm').submit(function (e) {
-                e.preventDefault(); // Prevent default form submission
-
-                // Simple validation
-                var fileInput = $('#payment_slip')[0];
-
-                if (fileInput.files.length === 0) {
-                    alert('Please select a file to upload.');
-                    return false;
-                }
-
-                var fileSize = fileInput.files[0].size / 1024 / 1024; // in MB
-                if (fileSize > 2) {
-                    alert('File size exceeds 2MB. Please choose a smaller file.');
-                    return false;
-                }
-
-                // Show loading state
-                var submitBtn = $(this).find('button[type="submit"]');
-                var originalText = submitBtn.html();
-                submitBtn.html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...');
-                submitBtn.prop('disabled', true);
-
+                e.preventDefault();
                 var formData = new FormData(this);
 
+                // Add current page state parameters
+                formData.append('search', '<?php echo htmlspecialchars($search); ?>');
+                formData.append('limit', '<?php echo $limit; ?>');
+                formData.append('page', '<?php echo $page; ?>');
+
                 $.ajax({
-                    url: 'mark_paid.php',
+                    url: 'process_payment.php',
                     type: 'POST',
                     data: formData,
-                    processData: false,
                     contentType: false,
+                    processData: false,
                     success: function (response) {
-                        // Check if SweetAlert2 is available
-                        if (typeof Swal !== 'undefined') {
-                            // Show success message with SweetAlert2
-                            Swal.fire({
-                                title: 'Success!',
-                                text: 'Order has been marked as paid successfully.',
-                                icon: 'success',
-                                confirmButtonText: 'OK'
-                            }).then((result) => {
-                                $('#markPaidModal').modal('hide');
-                                location.reload(); // Reload the page to reflect changes
-                            });
-                        } else {
-                            // Fallback to alert
-                            alert('Order marked as paid successfully.');
+                        var result = JSON.parse(response);
+                        if (result.status === 'success') {
+                            // Close modal
                             $('#markPaidModal').modal('hide');
-                            location.reload(); // Reload the page to reflect changes
+
+                            // Show success message and reload the page
+                            alert(result.message);
+                            window.location.reload();
+                        } else {
+                            // Show error message
+                            alert('Error: ' + result.message);
                         }
                     },
-                    error: function (xhr, status, error) {
-                        // Reset button state
-                        submitBtn.html(originalText);
-                        submitBtn.prop('disabled', false);
-
-                        if (typeof Swal !== 'undefined') {
-                            // Show error message with SweetAlert2
-                            Swal.fire({
-                                title: 'Error!',
-                                text: 'Failed to mark order as paid. Please try again.',
-                                icon: 'error',
-                                confirmButtonText: 'OK'
-                            });
-                        } else {
-                            // Fallback to alert
-                            alert('Failed to mark order as paid.');
-                        }
+                    error: function () {
+                        alert('An error occurred while processing the payment. Please try again.');
                     }
                 });
             });
-            
-            // Reset form when modal is hidden
-            $('#markPaidModal').on('hidden.bs.modal', function () {
-                $('#markPaidForm')[0].reset();
+
+            // Handle "Cancel Order" button click
+            $('.cancel-order').click(function (e) {
+                e.preventDefault();
+                var orderId = $(this).data('id');
+                var customerName = $(this).data('customer');
+
+                $('#cancel_order_id').text(orderId);
+                $('#cancel_customer_name').text(customerName);
+                $('#confirm_cancel_order_id').val(orderId);
+
+                $('#cancelOrderModal').modal('show');
             });
 
+            // Validate and update the cancellation reason when submitting the form
+            $('#cancelOrderForm').submit(function (e) {
+                var reason = $('#cancellation_reason').val().trim();
 
-            // Function to fetch payment details
-            function fetchPaymentDetails(orderId, payStatus) {
-                if (payStatus === 'paid') {
-                    $.ajax({
-                        url: 'get_payment_details.php',
-                        type: 'GET',
-                        data: { order_id: orderId },
-                        dataType: 'json',
-                        success: function (data) {
-                            if (data.success) {
-                                // Create payment details HTML
-                                var html = '<div class="card">' +
-                                    '<div class="card-body">' +
-                                    '<div class="row">' +
-                                    '<div class="col-md-6">' +
-                                    '<p><strong>Payment Method:</strong> ' + data.payment_method + '</p>' +
-                                    '<p><strong>Amount Paid:</strong> ' + data.amount_paid + '</p>' +
-                                    '</div>' +
-                                    '<div class="col-md-6">' +
-                                    '<p><strong>Payment Date:</strong> ' + data.payment_date + '</p>' +
-                                    '<p><strong>Processed By:</strong> ' + data.processed_by + '</p>' +
-                                    '</div>' +
-                                    '</div>';
-
-                                // Add payment slip if available
-                                if (data.slip) {
-                                    // Determine file extension for proper display
-                                    var fileExt = data.slip.split('.').pop().toLowerCase();
-                                    if (fileExt === 'pdf') {
-                                        // PDF display (link only)
-                                        html += '<div class="text-center mt-3">' +
-                                            '<p><strong>Payment Slip:</strong></p>' +
-                                            '<a href="uploads/payments/' + data.slip + '" target="_blank" class="btn btn-primary">' +
-                                            '<i class="fas fa-file-pdf me-2"></i>View Payment PDF</a>' +
-                                            '</div>';
-                                    } else {
-                                        // Image display (with preview)
-                                        html += '<div class="text-center mt-3">' +
-                                            '<p><strong>Payment Slip:</strong></p>' +
-                                            '<a href="uploads/payments/' + data.slip + '" target="_blank">' +
-                                            '<img src="uploads/payments/' + data.slip + '" class="img-fluid" style="max-height: 300px; border: 1px solid #ddd; padding: 5px;">' +
-                                            '</a>' +
-                                            '</div>';
-                                    }
-                                }
-
-                                html += '</div></div>';
-
-                                // Show the payment section
-                                $('#paymentDetails').html(html);
-                                $('#paymentInfoSection').show();
-                            } else {
-                                // If there's an error, show an error message
-                                $('#paymentDetails').html('<div class="alert alert-warning">No payment details found for this order.</div>');
-                                $('#paymentInfoSection').show();
-                            }
-                        },
-                        error: function () {
-                            // If AJAX fails, show an error
-                            $('#paymentDetails').html('<div class="alert alert-danger">Failed to load payment details.</div>');
-                            $('#paymentInfoSection').show();
-                        }
-                    });
-                } else {
-                    // If order is not paid, show appropriate message
-                    $('#paymentDetails').html('<div class="alert alert-info">This order has not been paid yet.</div>');
-                    $('#paymentInfoSection').show();
-                }
-            }
-
-            // Fade out alert messages after 5 seconds
-            setTimeout(function () {
-                $(".alert-dismissible").fadeOut("slow");
-            }, 5000);
-        });
-        // Sidebar Toggle Script
-        document.addEventListener('DOMContentLoaded', function () {
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            if (sidebarToggle) {
-                sidebarToggle.addEventListener('click', function (e) {
+                if (reason === '') {
                     e.preventDefault();
-                    document.body.classList.toggle('sb-sidenav-toggled');
-                    localStorage.setItem('sb|sidebar-toggle', document.body.classList.contains('sb-sidenav-toggled'));
-                });
-            }
+                    alert('Please provide a reason for cancellation.');
+                    $('#cancellation_reason').focus();
+                    return false;
+                }
 
-            // Check for stored state on page load
-            const storedSidebarState = localStorage.getItem('sb|sidebar-toggle');
-            if (storedSidebarState === 'true') {
-                document.body.classList.add('sb-sidenav-toggled');
-            }
+                // Update the hidden reason field before submitting
+                $('#confirm_cancellation_reason').val(reason);
+                return true;
+            });
+
+            // Transfer cancellation reason from modal textarea to hidden form field
+            $('#cancelOrderModal').on('shown.bs.modal', function () {
+                $('#cancellation_reason').focus();
+            });
+
+            $('#cancellation_reason').on('input', function () {
+                $('#confirm_cancellation_reason').val($(this).val());
+            });
         });
     </script>
+
+    <script src="js/scripts.js"></script>
 </body>
 
 </html>

@@ -225,6 +225,11 @@ $result = $conn->query($sql);
                                                                 data-paystatus="<?php echo $payStatus; ?>">
                                                                 <i class="fas fa-eye"></i>
                                                             </a>
+                                                            <a href="#" class="btn btn-sm btn-success text-white mark-dispatch"
+                                                                    title="Mark as Dispatch"
+                                                                    data-id="<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>">
+                                                                    <i class="fas fa-truck"></i>
+                                                                </a>
                                                             <!-- <a href="download_order.php?id=<?php echo isset($row['order_id']) ? $row['order_id'] : ''; ?>"
                                                                 class="btn btn-sm btn-success text-white" title="Download"
                                                                 target="_blank">
@@ -347,6 +352,77 @@ $result = $conn->query($sql);
         </div>
     </div>
 
+    <div class="modal fade" id="dispatchOrderModal" tabindex="-1" aria-labelledby="dispatchOrderModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fs-5" id="dispatchOrderModalLabel">Dispatch Order</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <form action="process_dispatch.php" method="post" id="dispatch-order-form">
+                    <input type="hidden" name="order_id" id="dispatch_order_id">
+                    <div class="modal-body">
+                        <!-- <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Dispatching this order will assign a tracking number and update the order status.
+                    </div> -->
+
+                        <div class="mb-3">
+                            <label for="carrier" class="form-label">Courier Service <span
+                                    class="text-danger">*</span></label>
+                            <select class="form-select" id="carrier" name="carrier" required>
+                                <option value="" selected disabled>Select courier service</option>
+                                <?php
+                                // Fetch active couriers from the database
+                                $courier_query = "SELECT courier_id, courier_name FROM couriers WHERE status = 'active' ORDER BY courier_name";
+                                $courier_result = $conn->query($courier_query);
+
+                                if ($courier_result && $courier_result->num_rows > 0) {
+                                    while ($courier = $courier_result->fetch_assoc()):
+                                        ?>
+                                        <option value="<?php echo $courier['courier_id']; ?>">
+                                            <?php echo htmlspecialchars($courier['courier_name']); ?></option>
+                                    <?php
+                                    endwhile;
+                                } else {
+                                    echo '<option value="" disabled>No couriers available</option>';
+                                }
+                                ?>
+                            </select>
+                            <div class="form-text">Select the courier service that will deliver this order</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Tracking Number</label>
+                            <div class="bg-light rounded p-3" id="tracking_number_display">
+                                <span class="text-muted small">Will be generated when you confirm dispatch</span>
+                            </div>
+                            <div class="form-text">An available tracking number will be assigned from the selected
+                                courier</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="dispatch_notes" class="form-label">Dispatch Notes</label>
+                            <textarea class="form-control" id="dispatch_notes" name="dispatch_notes" rows="3"
+                                placeholder="Enter additional notes about this dispatch (optional)"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-1"></i>Cancel
+                        </button>
+                        <button type="submit" class="btn btn-success" id="dispatch-submit-btn" disabled>
+                            <i class="fas fa-truck me-1"></i>Confirm Dispatch
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal for Marking Order as Paid -->
     <div class="modal fade" id="markPaidModal" tabindex="-1" aria-labelledby="markPaidModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -379,205 +455,350 @@ $result = $conn->query($sql);
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
     <script>
-        $(document).ready(function () {
-            // Handle "View" button click
-            $('.view-order').click(function (e) {
-                e.preventDefault(); // Prevent default link behavior
+      $(document).ready(function () {
+    // Handle "View" button click (existing code)
+    $('.view-order').click(function (e) {
+        e.preventDefault(); // Prevent default link behavior
 
-                var orderId = $(this).data('id'); // Get the order ID
-                var payStatus = $(this).data('paystatus'); // Get the payment status
+        var orderId = $(this).data('id'); // Get the order ID
+        var payStatus = $(this).data('paystatus'); // Get the payment status
 
-                // Show loading message in the modal
-                $('#orderDetails').html('Loading...');
+        // Show loading message in the modal
+        $('#orderDetails').html('Loading...');
 
-                // Hide payment info section initially
-                $('#paymentInfoSection').hide();
-                $('#paymentDetails').html('');
+        // Hide payment info section initially
+        $('#paymentInfoSection').hide();
+        $('#paymentDetails').html('');
 
-                // Fetch order details via AJAX
-                $.ajax({
-                    url: 'download_order.php',
-                    type: 'GET',
-                    data: {
-                        id: orderId,
-                        format: 'html' // Request HTML format instead of PDF download
-                    },
-                    success: function (response) {
-                        // Populate the modal with the fetched data
-                        $('#orderDetails').html(response);
+        // Fetch order details via AJAX
+        $.ajax({
+            url: 'download_order.php',
+            type: 'GET',
+            data: {
+                id: orderId,
+                format: 'html' // Request HTML format instead of PDF download
+            },
+            success: function (response) {
+                // Populate the modal with the fetched data
+                $('#orderDetails').html(response);
 
-                        // IMPORTANT: Remove the Print Order and Open in New Tab buttons
-                        $('#orderDetails').find('button:contains("Print Order")').remove();
-                        $('#orderDetails').find('button:contains("Open in New Tab")').remove();
-                        $('#orderDetails').find('button:contains("Download")').remove();
+                // IMPORTANT: Remove the Print Order and Open in New Tab buttons
+                $('#orderDetails').find('button:contains("Print Order")').remove();
+                $('#orderDetails').find('button:contains("Open in New Tab")').remove();
+                $('#orderDetails').find('button:contains("Download")').remove();
 
-                        // Add print button after the order details
-                        var printButton = '<div class="text-end mt-3">' +
-                            '<button type="button" class="btn btn-primary print-order" ' +
-                            'data-id="' + orderId + '">' +
-                            '<i class="fas fa-print me-1"></i>Print Order</button>' +
-                            '</div>';
-                        $('#orderDetails').append(printButton);
+                // Add print button after the order details
+                var printButton = '<div class="text-end mt-3">' +
+                    '<button type="button" class="btn btn-primary print-order" ' +
+                    'data-id="' + orderId + '">' +
+                    '<i class="fas fa-print me-1"></i>Print Order</button>' +
+                    '</div>';
+                $('#orderDetails').append(printButton);
 
-                        // Fetch payment details for this order
-                        fetchPaymentDetails(orderId, payStatus);
-
-                        // Show the modal
-                        $('#viewOrderModal').modal('show');
-                    },
-                    error: function () {
-                        $('#orderDetails').html('Failed to load order details.');
-                    }
-                });
-            });
-
-            // Handle Print Order button click
-            $(document).on('click', '.print-order', function () {
-                var orderId = $(this).data('id');
-
-                // Open the download_order.php in a new window for printing
-                var printWindow = window.open('download_order.php?id=' + orderId + '&format=html&print=true', '_blank');
-
-                // Trigger print when the new window is loaded
-                printWindow.onload = function () {
-                    printWindow.print();
-                };
-            });
-
-            // Function to fetch payment details
-            function fetchPaymentDetails(orderId, payStatus) {
-                if (payStatus === 'paid') {
-                    $.ajax({
-                        url: 'get_payment_details.php',
-                        type: 'GET',
-                        data: { order_id: orderId },
-                        dataType: 'json',
-                        success: function (data) {
-                            if (data.success) {
-                                // Create payment details HTML
-                                var html = '<div class="card">' +
-                                    '<div class="card-body">' +
-                                    '<div class="row">' +
-                                    '<div class="col-md-6">' +
-                                    '<p><strong>Payment Method:</strong> ' + data.payment_method + '</p>' +
-                                    '<p><strong>Amount Paid:</strong> ' + data.amount_paid + '</p>' +
-                                    '</div>' +
-                                    '<div class="col-md-6">' +
-                                    '<p><strong>Payment Date:</strong> ' + data.payment_date + '</p>' +
-                                    '<p><strong>Processed By:</strong> ' + data.processed_by + '</p>' +
-                                    '</div>' +
-                                    '</div>';
-
-                                // Add payment slip if available
-                                if (data.slip) {
-                                    // Determine file extension for proper display
-                                    var fileExt = data.slip.split('.').pop().toLowerCase();
-                                    if (fileExt === 'pdf') {
-                                        // PDF display (link only)
-                                        html += '<div class="text-center mt-3">' +
-                                            '<p><strong>Payment Slip:</strong></p>' +
-                                            '<a href="uploads/payments/' + data.slip + '" target="_blank" class="btn btn-primary">' +
-                                            '<i class="fas fa-file-pdf me-2"></i>View Payment PDF</a>' +
-                                            '</div>';
-                                    } else {
-                                        // Image display (with preview)
-                                        html += '<div class="text-center mt-3">' +
-                                            '<p><strong>Payment Slip:</strong></p>' +
-                                            '<a href="uploads/payments/' + data.slip + '" target="_blank">' +
-                                            '<img src="uploads/payments/' + data.slip + '" class="img-fluid" style="max-height: 300px; border: 1px solid #ddd; padding: 5px;">' +
-                                            '</a>' +
-                                            '</div>';
-                                    }
-                                }
-
-                                html += '</div></div>';
-
-                                // Show the payment section
-                                $('#paymentDetails').html(html);
-                                $('#paymentInfoSection').show();
-                            } else {
-                                // If there's an error, show an error message
-                                $('#paymentDetails').html('<div class="alert alert-warning">No payment details found for this order.</div>');
-                                $('#paymentInfoSection').show();
-                            }
-                        },
-                        error: function () {
-                            // If AJAX fails, show an error
-                            $('#paymentDetails').html('<div class="alert alert-danger">Failed to load payment details.</div>');
-                            $('#paymentInfoSection').show();
-                        }
-                    });
-                } else {
-                    // If order is not paid, show appropriate message
-                    $('#paymentDetails').html('<div class="alert alert-info">This order has not been paid yet.</div>');
-                    $('#paymentInfoSection').show();
-                }
-            }
-
-            // Handle "Paid" button click
-            $('.mark-paid').click(function (e) {
-                e.preventDefault(); // Prevent default link behavior
-
-                var orderId = $(this).data('id'); // Get the order ID
-
-                // Directly set the order ID in the form without fetching other details
-                $('#order_id').val(orderId);
+                // Fetch payment details for this order
+                fetchPaymentDetails(orderId, payStatus);
 
                 // Show the modal
-                $('#markPaidModal').modal('show');
-            });
-
-            // Handle form submission
-            $('#markPaidForm').submit(function (e) {
-                e.preventDefault(); // Prevent default form submission
-
-                // Simple validation
-                var fileInput = $('#payment_slip')[0];
-
-                if (fileInput.files.length === 0) {
-                    alert('Please select a file to upload.');
-                    return false;
-                }
-
-                var fileSize = fileInput.files[0].size / 1024 / 1024; // in MB
-                if (fileSize > 2) {
-                    alert('File size exceeds 2MB. Please choose a smaller file.');
-                    return false;
-                }
-
-                var formData = new FormData(this);
-
-                $.ajax({
-                    url: 'mark_paid.php',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function (response) {
-                        alert('Order marked as paid successfully.');
-                        $('#markPaidModal').modal('hide');
-                        location.reload(); // Reload the page to reflect changes
-                    },
-                    error: function () {
-                        alert('Failed to mark order as paid.');
-                    }
-                });
-            });
-
-            // Handle Cancel Order button click
-            $('.cancel-order').click(function () {
-                var orderId = $(this).data('id');
-                var customerName = $(this).data('customer');
-                $('#cancel_order_id').text(orderId);
-                $('#cancel_customer_name').text(customerName);
-                $('#confirm_cancel_order_id').val(orderId);
-            });
-
-            // Fade out alert messages after 5 seconds
-            setTimeout(function () {
-                $(".alert-dismissible").fadeOut("slow");
-            }, 5000);
+                $('#viewOrderModal').modal('show');
+            },
+            error: function () {
+                $('#orderDetails').html('Failed to load order details.');
+            }
         });
+    });
+
+    // Handle Print Order button click (existing code)
+    $(document).on('click', '.print-order', function () {
+        var orderId = $(this).data('id');
+
+        // Open the download_order.php in a new window for printing
+        var printWindow = window.open('download_order.php?id=' + orderId + '&format=html&print=true', '_blank');
+
+        // Trigger print when the new window is loaded
+        printWindow.onload = function () {
+            printWindow.print();
+        };
+    });
+
+    // Function to fetch payment details (existing code)
+    function fetchPaymentDetails(orderId, payStatus) {
+        if (payStatus === 'paid') {
+            $.ajax({
+                url: 'get_payment_details.php',
+                type: 'GET',
+                data: { order_id: orderId },
+                dataType: 'json',
+                success: function (data) {
+                    if (data.success) {
+                        // Create payment details HTML
+                        var html = '<div class="card">' +
+                            '<div class="card-body">' +
+                            '<div class="row">' +
+                            '<div class="col-md-6">' +
+                            '<p><strong>Payment Method:</strong> ' + data.payment_method + '</p>' +
+                            '<p><strong>Amount Paid:</strong> ' + data.amount_paid + '</p>' +
+                            '</div>' +
+                            '<div class="col-md-6">' +
+                            '<p><strong>Payment Date:</strong> ' + data.payment_date + '</p>' +
+                            '<p><strong>Processed By:</strong> ' + data.processed_by + '</p>' +
+                            '</div>' +
+                            '</div>';
+
+                        // Add payment slip if available
+                        if (data.slip) {
+                            // Determine file extension for proper display
+                            var fileExt = data.slip.split('.').pop().toLowerCase();
+                            if (fileExt === 'pdf') {
+                                // PDF display (link only)
+                                html += '<div class="text-center mt-3">' +
+                                    '<p><strong>Payment Slip:</strong></p>' +
+                                    '<a href="uploads/payments/' + data.slip + '" target="_blank" class="btn btn-primary">' +
+                                    '<i class="fas fa-file-pdf me-2"></i>View Payment PDF</a>' +
+                                    '</div>';
+                            } else {
+                                // Image display (with preview)
+                                html += '<div class="text-center mt-3">' +
+                                    '<p><strong>Payment Slip:</strong></p>' +
+                                    '<a href="uploads/payments/' + data.slip + '" target="_blank">' +
+                                    '<img src="uploads/payments/' + data.slip + '" class="img-fluid" style="max-height: 300px; border: 1px solid #ddd; padding: 5px;">' +
+                                    '</a>' +
+                                    '</div>';
+                            }
+                        }
+
+                        html += '</div></div>';
+
+                        // Show the payment section
+                        $('#paymentDetails').html(html);
+                        $('#paymentInfoSection').show();
+                    } else {
+                        // If there's an error, show an error message
+                        $('#paymentDetails').html('<div class="alert alert-warning">No payment details found for this order.</div>');
+                        $('#paymentInfoSection').show();
+                    }
+                },
+                error: function () {
+                    // If AJAX fails, show an error
+                    $('#paymentDetails').html('<div class="alert alert-danger">Failed to load payment details.</div>');
+                    $('#paymentInfoSection').show();
+                }
+            });
+        } else {
+            // If order is not paid, show appropriate message
+            $('#paymentDetails').html('<div class="alert alert-info">This order has not been paid yet.</div>');
+            $('#paymentInfoSection').show();
+        }
+    }
+
+    // Handle "Paid" button click (existing code)
+    $('.mark-paid').click(function (e) {
+        e.preventDefault(); // Prevent default link behavior
+
+        var orderId = $(this).data('id'); // Get the order ID
+
+        // Directly set the order ID in the form without fetching other details
+        $('#order_id').val(orderId);
+
+        // Show the modal
+        $('#markPaidModal').modal('show');
+    });
+
+    // Handle form submission (existing code)
+    $('#markPaidForm').submit(function (e) {
+        e.preventDefault(); // Prevent default form submission
+
+        // Simple validation
+        var fileInput = $('#payment_slip')[0];
+
+        if (fileInput.files.length === 0) {
+            alert('Please select a file to upload.');
+            return false;
+        }
+
+        var fileSize = fileInput.files[0].size / 1024 / 1024; // in MB
+        if (fileSize > 2) {
+            alert('File size exceeds 2MB. Please choose a smaller file.');
+            return false;
+        }
+
+        var formData = new FormData(this);
+
+        $.ajax({
+            url: 'mark_paid.php',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function (response) {
+                alert('Order marked as paid successfully.');
+                $('#markPaidModal').modal('hide');
+                location.reload(); // Reload the page to reflect changes
+            },
+            error: function () {
+                alert('Failed to mark order as paid.');
+            }
+        });
+    });
+
+    // NEW CODE FOR MARK AS DISPATCH FUNCTIONALITY
+    // Open the dispatch modal when clicking the dispatch button
+    $('.mark-dispatch').click(function(e) {
+        e.preventDefault();
+        var orderId = $(this).data('id');
+        $('#dispatch_order_id').val(orderId);
+        $('#dispatchOrderModal').modal('show');
+    });
+
+    // When courier selection changes
+    $('#carrier').change(function() {
+        var courierId = $(this).val();
+        var $trackingDisplay = $('#tracking_number_display');
+        var $submitBtn = $('#dispatch-submit-btn');
+        
+        if (!courierId) {
+            $trackingDisplay.html('<span class="text-muted small">Will be generated when you confirm dispatch</span>');
+            $submitBtn.prop('disabled', true);
+            return;
+        }
+        
+        $trackingDisplay.html('<span class="text-muted small">Checking available tracking numbers...</span>');
+        $submitBtn.prop('disabled', true);
+        
+        $.ajax({
+            url: 'get_tracking_number.php',
+            type: 'GET',
+            data: { courier_id: courierId },
+            dataType: 'json',
+            success: function(response) {
+                if (response.status === 'success') {
+                    $trackingDisplay.html('<span class="text-success">' + response.tracking_number + '</span>' + 
+                                         '<div class="text-success small mt-1"><i class="fas fa-check-circle me-1"></i>Tracking number is available</div>');
+                    $submitBtn.prop('disabled', false);
+                } else {
+                    $trackingDisplay.html('<div class="text-danger small"><i class="fas fa-exclamation-circle me-1"></i>' + 
+                                         (response.message || 'No tracking numbers available') + '</div>');
+                    $submitBtn.prop('disabled', true);
+                }
+            },
+            error: function() {
+                $trackingDisplay.html('<div class="text-danger small"><i class="fas fa-exclamation-circle me-1"></i>Error loading tracking numbers</div>');
+                $submitBtn.prop('disabled', true);
+            }
+        });
+    });
+
+    // Handle the dispatch form submission
+    $('#dispatch-order-form').submit(function(e) {
+        e.preventDefault();
+        var $form = $(this);
+        var $submitBtn = $('#dispatch-submit-btn');
+        var originalBtnText = $submitBtn.html();
+        
+        // Disable the submit button and show loading state
+        $submitBtn.html('<i class="fas fa-spinner fa-spin me-1"></i> Processing...');
+        $submitBtn.prop('disabled', true);
+        
+        $.ajax({
+            url: 'process_dispatch.php',
+            type: 'POST',
+            data: $form.serialize(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.status === 'success') {
+                    // If SweetAlert2 is available
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'Success!',
+                            text: 'Order has been dispatched successfully with tracking number: ' + response.tracking_number,
+                            icon: 'success',
+                            confirmButtonText: 'OK'
+                        }).then(function() {
+                            location.reload();
+                        });
+                    } else {
+                        // Fallback to regular alert
+                        alert('Order has been dispatched successfully with tracking number: ' + response.tracking_number);
+                        location.reload();
+                    }
+                } else {
+                    // Error handling
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'Error',
+                            text: response.message || 'Failed to dispatch order.',
+                            icon: 'error',
+                            confirmButtonText: 'OK'
+                        });
+                    } else {
+                        alert(response.message || 'Failed to dispatch order.');
+                    }
+                    
+                    // Reset button state
+                    $submitBtn.html(originalBtnText);
+                    $submitBtn.prop('disabled', false);
+                }
+            },
+            error: function(xhr, status, error) {
+                // AJAX error handling
+                console.error("AJAX error:", xhr, status, error);
+                
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Error',
+                        text: 'An error occurred while processing your request. Please try again.',
+                        icon: 'error',
+                        confirmButtonText: 'OK'
+                    });
+                } else {
+                    alert('An error occurred while processing your request. Please try again.');
+                }
+                
+                // Reset button state
+                $submitBtn.html(originalBtnText);
+                $submitBtn.prop('disabled', false);
+            }
+        });
+    });
+
+    // Reset the form when the modal is closed
+    $('#dispatchOrderModal').on('hidden.bs.modal', function() {
+        $('#dispatch-order-form')[0].reset();
+        $('#tracking_number_display').html('<span class="text-muted small">Will be generated when you confirm dispatch</span>');
+        $('#dispatch-submit-btn').prop('disabled', true);
+    });
+
+    // Handle Cancel Order button click (existing code)
+    $('.cancel-order').click(function() {
+        var orderId = $(this).data('id');
+        var customerName = $(this).data('customer');
+        $('#cancel_order_id').text(orderId);
+        $('#cancel_customer_name').text(customerName);
+        $('#confirm_cancel_order_id').val(orderId);
+    });
+
+    // Fade out alert messages after 5 seconds (existing code)
+    setTimeout(function() {
+        $(".alert-dismissible").fadeOut("slow");
+    }, 5000);
+});
+
+// Sidebar Toggle Script
+document.addEventListener('DOMContentLoaded', function() {
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.body.classList.toggle('sb-sidenav-toggled');
+            localStorage.setItem('sb|sidebar-toggle', document.body.classList.contains('sb-sidenav-toggled'));
+        });
+    }
+    
+    // Check for stored state on page load
+    const storedSidebarState = localStorage.getItem('sb|sidebar-toggle');
+    if (storedSidebarState === 'true') {
+        document.body.classList.add('sb-sidenav-toggled');
+    }
+});
     </script>
 </body>
 

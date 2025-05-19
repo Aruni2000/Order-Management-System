@@ -1,63 +1,72 @@
 <?php
-// Start session at the very beginning
+// Implementation for get_payment_details.php
+// This file will fetch payment details for an order ID
+
+// Start session
 session_start();
 
 // Check if user is logged in
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    header('Content-Type: application/json');
+    header('HTTP/1.1 403 Forbidden');
     echo json_encode(['success' => false, 'message' => 'Unauthorized access']);
     exit();
 }
 
-// Include the database connection
+// Include database connection
 include 'db_connection.php';
 
-// Get the order ID from the request
-$orderId = isset($_GET['order_id']) ? $_GET['order_id'] : null;
-
-if (!$orderId) {
-    header('Content-Type: application/json');
+// Check if order ID is provided
+if (!isset($_GET['order_id']) || empty($_GET['order_id'])) {
+    header('HTTP/1.1 400 Bad Request');
     echo json_encode(['success' => false, 'message' => 'Order ID is required']);
     exit();
 }
 
-// Sanitize the input
-$orderId = $conn->real_escape_string($orderId);
+// Get order ID
+$order_id = intval($_GET['order_id']);
 
-// Query to get payment details including slip from order_header
-$sql = "SELECT o.pay_status, o.pay_by, o.pay_date, o.slip, o.total_amount, 
-               CASE 
-                   WHEN o.slip IS NOT NULL THEN 'Bank Transfer'
-                   ELSE 'Cash'
-               END AS payment_method,
-               u.name AS processed_by
-        FROM order_header o
-        LEFT JOIN users u ON o.pay_by = u.id
-        WHERE o.order_id = '$orderId'";
+// Get payment details from the database
+$query = "SELECT p.*, u.name as processed_by_name, oh.slip 
+          FROM payments p 
+          LEFT JOIN users u ON p.pay_by = u.id
+          LEFT JOIN order_header oh ON p.order_id = oh.order_id
+          WHERE p.order_id = ?";
 
-$result = $conn->query($sql);
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $order_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
-// Format and send the response
-if ($result && $result->num_rows > 0) {
-    $row = $result->fetch_assoc();
+if ($result->num_rows > 0) {
+    $data = $result->fetch_assoc();
     
-    // Prepare the response
+    // Format the payment date
+    $payment_date = isset($data['payment_date']) ? date('d/m/Y H:i', strtotime($data['payment_date'])) : 'N/A';
+    
+    // Format the amount
+    $amount_paid = isset($data['amount_paid']) ? number_format((float)$data['amount_paid'], 2) : '0.00';
+    $currency = 'Rs'; // Default currency symbol
+    
+    // Prepare response
     $response = [
         'success' => true,
-        'payment_method' => $row['payment_method'],
-        'amount_paid' => number_format((float)$row['total_amount'], 2) . ' ' . ($row['currency'] ?? 'Rs'),
-        'payment_date' => $row['pay_date'] ? date('d/m/Y', strtotime($row['pay_date'])) : 'N/A',
-        'processed_by' => $row['processed_by'] ?? 'N/A',
-        'slip' => $row['slip'] ?? null
+        'payment_id' => $data['payment_id'] ?? '',
+        'payment_method' => $data['payment_method'] ?? 'Cash',
+        'amount_paid' => $amount_paid . ' (' . $currency . ')',
+        'payment_date' => $payment_date,
+        'processed_by' => $data['processed_by_name'] ?? 'System',
+        'slip' => $data['slip'] ?? ''
     ];
     
     header('Content-Type: application/json');
     echo json_encode($response);
 } else {
+    // No payment details found
     header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Payment details not found']);
+    echo json_encode(['success' => false, 'message' => 'No payment details found for this order']);
 }
 
-// Close the connection
+// Close statement and connection
+$stmt->close();
 $conn->close();
 ?>

@@ -11963,9 +11963,9 @@ body {
     border: none;
     margin-bottom: 20px;
 }
-.card-body {
+/* .card-body {
     padding: 24px;
-}
+} */
 .form-control, .form-select {
     border-radius: 6px;
     border: 1px solid #dee2e6;

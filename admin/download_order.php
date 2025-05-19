@@ -651,6 +651,7 @@ $column_count = $has_any_discount ? 5 : 4;
                 });
             }
         });
+        
     </script>
 </body>
 
