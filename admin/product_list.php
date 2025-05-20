@@ -159,7 +159,6 @@ $totalproducts = $countResult->fetch_assoc()['total'];
                                             <th>Name</th>
                                             <th>Description</th>
                                             <th>Price (LKR)</th>
-                                            <th>Price (USD)</th>
                                             <th>Created At</th>
                                             <th>Status</th>
                                             <th>Actions</th>
@@ -182,17 +181,6 @@ $totalproducts = $countResult->fetch_assoc()['total'];
                                                         echo number_format($row['lkr_price'], 2) . ' LKR';
                                                     } elseif (isset($row['price']) && isset($row['currency']) && $row['currency'] == 'LKR') {
                                                         echo number_format($row['price'], 2) . ' LKR';
-                                                    } else {
-                                                        echo 'N/A';
-                                                    }
-                                                    ?>
-                                                </td>
-                                                <td>
-                                                    <?php
-                                                    if (isset($row['usd_price'])) {
-                                                        echo number_format($row['usd_price'], 2) . ' USD';
-                                                    } elseif (isset($row['price']) && isset($row['currency']) && $row['currency'] == 'USD') {
-                                                        echo number_format($row['price'], 2) . ' USD';
                                                     } else {
                                                         echo 'N/A';
                                                     }
@@ -252,17 +240,6 @@ $totalproducts = $countResult->fetch_assoc()['total'];
                                                                     echo number_format($row['lkr_price'], 2) . ' LKR';
                                                                 } elseif (isset($row['price']) && isset($row['currency']) && $row['currency'] == 'LKR') {
                                                                     echo number_format($row['price'], 2) . ' LKR';
-                                                                } else {
-                                                                    echo 'N/A';
-                                                                }
-                                                                ?>
-                                                            </p>
-                                                            <p><strong>Price (USD):</strong> 
-                                                                <?php
-                                                                if (isset($row['usd_price'])) {
-                                                                    echo number_format($row['usd_price'], 2) . ' USD';
-                                                                } elseif (isset($row['price']) && isset($row['currency']) && $row['currency'] == 'USD') {
-                                                                    echo number_format($row['price'], 2) . ' USD';
                                                                 } else {
                                                                     echo 'N/A';
                                                                 }

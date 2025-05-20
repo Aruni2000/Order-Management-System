@@ -28,17 +28,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Sanitize inputs to prevent SQL injection
     $name = $conn->real_escape_string($_POST['name']);
     $description = $conn->real_escape_string($_POST['description']);
-    $lkr_price = floatval($_POST['lkr_price']); // Remove NULL check
-    $usd_price = floatval($_POST['usd_price']); // Remove NULL check
+    $lkr_price = floatval($_POST['lkr_price']);
     
-    // Both prices are now required, so no need for NULL check
-    // Insert the new product into the database with both price fields
-    $sql = "INSERT INTO products (name, description, lkr_price, usd_price, created_at, status) 
-            VALUES (?, ?, ?, ?, NOW(), 'active')";
+    // Insert the new product into the database with only LKR price field
+    $sql = "INSERT INTO products (name, description, lkr_price, created_at, status) 
+            VALUES (?, ?, ?, NOW(), 'active')";
     
     // Use prepared statement to avoid SQL injection
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ssdd", $name, $description, $lkr_price, $usd_price);
+    $stmt->bind_param("ssd", $name, $description, $lkr_price);
     
     if ($stmt->execute()) {
         // Set flag to show success message
@@ -176,16 +174,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                 name="lkr_price" placeholder="Enter LKR Price" required
                                                 value="<?php echo isset($_POST['lkr_price']) ? htmlspecialchars($_POST['lkr_price']) : ''; ?>">
                                         </div>
-
-                                        <!-- USD Price Field -->
-                                        <div class="mb-3">
-                                            <label for="usd_price" class="form-label">
-                                                <i class="fas fa-dollar-sign"></i> USD Price
-                                            </label>
-                                            <input type="number" step="0.01" class="form-control" id="usd_price" 
-                                                name="usd_price" placeholder="Enter USD Price" required
-                                                value="<?php echo isset($_POST['usd_price']) ? htmlspecialchars($_POST['usd_price']) : ''; ?>">
-                                        </div>
                                     </div>
                                 </div>
 
@@ -222,12 +210,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Form validation
         document.getElementById('addProductForm').addEventListener('submit', function(event) {
             const lkrPrice = document.getElementById('lkr_price').value.trim();
-            const usdPrice = document.getElementById('usd_price').value.trim();
             
-            // Check if both price fields are filled
-            if (lkrPrice === '' || usdPrice === '') {
+            // Check if price field is filled
+            if (lkrPrice === '') {
                 event.preventDefault();
-                alert('Both LKR and USD prices are required.');
+                alert('LKR price is required.');
                 return false;
             }
             
@@ -235,13 +222,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if (parseFloat(lkrPrice) < 0 || parseFloat(lkrPrice) > 1000000) {
                 event.preventDefault();
                 alert('Please enter a valid LKR price between 0 and 1,000,000');
-                return false;
-            }
-            
-            // Validate USD price
-            if (parseFloat(usdPrice) < 0 || parseFloat(usdPrice) > 10000) {
-                event.preventDefault();
-                alert('Please enter a valid USD price between 0 and 10,000');
                 return false;
             }
         });

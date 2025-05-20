@@ -53,20 +53,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $name = $conn->real_escape_string($_POST['name']);
     $description = $conn->real_escape_string($_POST['description']);
     
-    // Both price fields are now required
+    // Only LKR price is required now
     $lkr_price = floatval($_POST['lkr_price']);
-    $usd_price = floatval($_POST['usd_price']);
     
     // Use a simple approach that works correctly with values
     $updateSql = "UPDATE products SET 
                  name = ?, 
                  description = ?, 
-                 lkr_price = ?, 
-                 usd_price = ? 
+                 lkr_price = ? 
                  WHERE id = ?";
                  
     $stmt = $conn->prepare($updateSql);
-    $stmt->bind_param("ssddi", $name, $description, $lkr_price, $usd_price, $product_id);
+    $stmt->bind_param("ssdi", $name, $description, $lkr_price, $product_id);
     
     if ($stmt->execute()) {
         // Set flag to show success message
@@ -107,19 +105,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         // Handle price changes
         $original_lkr = $original_product['lkr_price'];
-        $original_usd = $original_product['usd_price'];
         
         // Check for price changes
         if ($original_lkr != $lkr_price) {
             $old_price = is_null($original_lkr) ? 'not set' : number_format($original_lkr, 2) . ' LKR';
             $new_price = number_format($lkr_price, 2) . ' LKR';
             $changes[] = "LKR Price changed from $old_price to $new_price";
-        }
-        
-        if ($original_usd != $usd_price) {
-            $old_price = is_null($original_usd) ? 'not set' : number_format($original_usd, 2) . ' USD';
-            $new_price = number_format($usd_price, 2) . ' USD';
-            $changes[] = "USD Price changed from $old_price to $new_price";
         }
         
         // If no changes were detected
@@ -276,16 +267,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                     name="lkr_price" placeholder="Enter LKR Price" required
                                                     value="<?= ($product['lkr_price'] !== NULL) ? htmlspecialchars($product['lkr_price']) : '' ?>">
                                             </div>
-
-                                            <!-- USD Price Field -->
-                                            <div class="mb-3">
-                                                <label for="usd_price" class="form-label">
-                                                    <i class="fas fa-dollar-sign"></i> USD Price
-                                                </label>
-                                                <input type="number" step="0.01" class="form-control" id="usd_price" 
-                                                    name="usd_price" placeholder="Enter USD Price" required
-                                                    value="<?= ($product['usd_price'] !== NULL) ? htmlspecialchars($product['usd_price']) : '' ?>">
-                                            </div>
                                         </div>
                                     </div>
 
@@ -321,12 +302,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Form validation
         document.getElementById('editProductForm').addEventListener('submit', function(event) {
             const lkrPrice = document.getElementById('lkr_price').value.trim();
-            const usdPrice = document.getElementById('usd_price').value.trim();
             
-            // Check if both price fields are filled
-            if (lkrPrice === '' || usdPrice === '') {
+            // Check if price field is filled
+            if (lkrPrice === '') {
                 event.preventDefault();
-                alert('Both LKR and USD prices are required.');
+                alert('LKR price is required.');
                 return false;
             }
             
@@ -334,13 +314,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if (parseFloat(lkrPrice) < 0 || parseFloat(lkrPrice) > 1000000) {
                 event.preventDefault();
                 alert('Please enter a valid LKR price between 0 and 1,000,000');
-                return false;
-            }
-            
-            // Validate USD price
-            if (parseFloat(usdPrice) < 0 || parseFloat(usdPrice) > 10000) {
-                event.preventDefault();
-                alert('Please enter a valid USD price between 0 and 10,000');
                 return false;
             }
         });
