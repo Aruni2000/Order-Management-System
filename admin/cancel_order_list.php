@@ -167,7 +167,6 @@ $result = $conn->query($sql);
                                             <th>Total Amount</th>
                                             <th>Status</th>
                                             <th>Pay Status</th>
-                                            <th>Processed By</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -209,15 +208,7 @@ $result = $conn->query($sql);
                                                             <span class="badge bg-danger">Unpaid</span>
                                                         <?php endif; ?>
                                                     </td>
-                                                    <td>
-                                                        <?php
-                                                        if (isset($row['pay_by']) && isset($row['paid_by_name'])) {
-                                                            echo htmlspecialchars($row['paid_by_name']) . ' (' . htmlspecialchars($row['pay_by']) . ')';
-                                                        } else {
-                                                            echo 'N/A';
-                                                        }
-                                                        ?>
-                                                    </td>
+                                                
                                                     <td>
                                                         <div class="btn-group">
                                                             <a href="#" class="btn btn-sm btn-info text-white view-order"

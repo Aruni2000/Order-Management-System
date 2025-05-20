@@ -558,240 +558,387 @@ $result = $conn->query($sql);
             </div>
         </div>
     </div>
-
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
     <script>
-        $(document).ready(function () {
-            // Handle "View" button click
-            $('.view-order').click(function (e) {
-                e.preventDefault(); // Prevent default link behavior
+    $(document).ready(function () {
+    // Handle "View" button click (existing code)
+    $('.view-order').click(function (e) {
+        e.preventDefault(); // Prevent default link behavior
 
-                var orderId = $(this).data('id'); // Get the order ID
-                var payStatus = $(this).data('paystatus'); // Get the payment status
+        var orderId = $(this).data('id'); // Get the order ID
+        var payStatus = $(this).data('paystatus'); // Get the payment status
 
-                // Show loading message in the modal
-                $('#orderDetails').html('Loading...');
+        // Show loading message in the modal
+        $('#orderDetails').html('Loading...');
 
-                // Hide info sections initially
-                $('#dispatchInfoSection').hide();
-                $('#dispatchDetails').html('');
-                $('#paymentInfoSection').hide();
-                $('#paymentDetails').html('');
+        // Hide payment info section initially
+        $('#paymentInfoSection').hide();
+        $('#paymentDetails').html('');
 
-                // Fetch order details via AJAX
-                $.ajax({
-                    url: 'download_order.php',
-                    type: 'GET',
-                    data: {
-                        id: orderId,
-                        format: 'html' // Request HTML format instead of PDF download
-                    },
-                    success: function (response) {
-                        // Populate the modal with the fetched data
-                        $('#orderDetails').html(response);
+        // Hide dispatch info section initially
+        $('#dispatchInfoSection').hide();
+        $('#dispatchDetails').html('');
 
-                        // IMPORTANT: Remove the Print Order and Open in New Tab buttons
-                        $('#orderDetails').find('button:contains("Print Order")').remove();
-                        $('#orderDetails').find('button:contains("Open in New Tab")').remove();
-                        $('#orderDetails').find('button:contains("Download")').remove();
+        // Fetch order details via AJAX
+        $.ajax({
+            url: 'download_order.php',
+            type: 'GET',
+            data: {
+                id: orderId,
+                format: 'html' // Request HTML format instead of PDF download
+            },
+            success: function (response) {
+                // Populate the modal with the fetched data
+                $('#orderDetails').html(response);
 
-                        // Add print button after the order details
-                        var printButton = '<div class="text-end mt-3">' +
-                            '<button type="button" class="btn btn-primary print-order" ' +
-                            'data-id="' + orderId + '">' +
-                            '<i class="fas fa-print me-1"></i>Print Order</button>'
-                        '<i class="fas fa-print me-1"></i>Print Order</button>' +
-                            '</div>';
-                        $('#orderDetails').append(printButton);
+                // IMPORTANT: Remove the Print Order and Open in New Tab buttons
+                $('#orderDetails').find('button:contains("Print Order")').remove();
+                $('#orderDetails').find('button:contains("Open in New Tab")').remove();
+                $('#orderDetails').find('button:contains("Download")').remove();
 
-                        // Fetch dispatch information
-                        $.ajax({
-                            url: 'get_dispatch_info.php',
-                            type: 'GET',
-                            data: { order_id: orderId },
-                            dataType: 'json',
-                            success: function (dispatchData) {
-                                if (dispatchData && dispatchData.success) {
-                                    // Populate dispatch details
-                                    var dispatchHtml = '<div class="row">';
-                                    dispatchHtml += '<div class="col-md-6">';
-                                    dispatchHtml += '<p><strong>Courier:</strong> ' + (dispatchData.courier_name || 'N/A') + '</p>';
-                                    dispatchHtml += '<p><strong>Tracking Number:</strong> ' + (dispatchData.tracking_number || 'N/A') + '</p>';
-                                    dispatchHtml += '</div>';
-                                    dispatchHtml += '<div class="col-md-6">';
-                                    dispatchHtml += '<p><strong>Dispatch Date:</strong> ' + (dispatchData.dispatch_date || 'N/A') + '</p>';
-                                    dispatchHtml += '<p><strong>Expected Delivery:</strong> ' + (dispatchData.expected_delivery || 'N/A') + '</p>';
-                                    dispatchHtml += '</div>';
-                                    dispatchHtml += '</div>';
+                // Add print button after the order details
+                var printButton = '<div class="text-end mt-3">' +
+                    '<button type="button" class="btn btn-primary print-order" ' +
+                    'data-id="' + orderId + '">' +
+                    '<i class="fas fa-print me-1"></i>Print Order</button>' +
+                    '</div>';
+                $('#orderDetails').append(printButton);
 
-                                    if (dispatchData.notes) {
-                                        dispatchHtml += '<div class="row mt-2">';
-                                        dispatchHtml += '<div class="col-12">';
-                                        dispatchHtml += '<p><strong>Dispatch Notes:</strong></p>';
-                                        dispatchHtml += '<p class="border p-2 bg-light">' + dispatchData.notes + '</p>';
-                                        dispatchHtml += '</div>';
-                                        dispatchHtml += '</div>';
-                                    }
-
-                                    $('#dispatchDetails').html(dispatchHtml);
-                                    $('#dispatchInfoSection').show();
-                                }
-                            },
-                            error: function () {
-                                $('#dispatchDetails').html('<div class="alert alert-warning">Failed to load dispatch information.</div>');
-                                $('#dispatchInfoSection').show();
-                            }
-                        });
-
-                        // If order is paid, fetch payment information
-                        if (payStatus === 'paid') {
-                            $.ajax({
-                                url: 'get_payment_info.php',
-                                type: 'GET',
-                                data: { order_id: orderId },
-                                dataType: 'json',
-                                success: function (paymentData) {
-                                    if (paymentData && paymentData.success) {
-                                        // Populate payment details
-                                        var paymentHtml = '<div class="row">';
-                                        paymentHtml += '<div class="col-md-6">';
-                                        paymentHtml += '<p><strong>Payment ID:</strong> ' + (paymentData.payment_id || 'N/A') + '</p>';
-                                        paymentHtml += '<p><strong>Payment Method:</strong> ' + (paymentData.payment_method || 'N/A') + '</p>';
-                                        paymentHtml += '<p><strong>Amount Paid:</strong> ' + (paymentData.currency_symbol || 'Rs') + ' ' + (paymentData.amount_paid || '0.00') + '</p>';
-                                        paymentHtml += '</div>';
-                                        paymentHtml += '<div class="col-md-6">';
-                                        paymentHtml += '<p><strong>Payment Date:</strong> ' + (paymentData.payment_date || 'N/A') + '</p>';
-                                        paymentHtml += '<p><strong>Processed By:</strong> ' + (paymentData.processed_by || 'N/A') + '</p>';
-                                        paymentHtml += '</div>';
-                                        paymentHtml += '</div>';
-
-                                        if (paymentData.payment_slip) {
-                                            paymentHtml += '<div class="row mt-3">';
-                                            paymentHtml += '<div class="col-12">';
-                                            paymentHtml += '<p><strong>Payment Slip:</strong></p>';
-                                            paymentHtml += '<div class="text-center">';
-                                            paymentHtml += '<a href="' + paymentData.payment_slip + '" target="_blank" class="btn btn-sm btn-outline-primary">';
-                                            paymentHtml += '<i class="fas fa-file-image me-1"></i>View Payment Slip</a>';
-                                            paymentHtml += '</div>';
-                                            paymentHtml += '</div>';
-                                            paymentHtml += '</div>';
-                                        }
-
-                                        $('#paymentDetails').html(paymentHtml);
-                                        $('#paymentInfoSection').show();
-                                    }
-                                },
-                                error: function () {
-                                    $('#paymentDetails').html('<div class="alert alert-warning">Failed to load payment information.</div>');
-                                    $('#paymentInfoSection').show();
-                                }
-                            });
-                        }
-                    },
-                    error: function () {
-                        // Display error message if AJAX request fails
-                        $('#orderDetails').html('<div class="alert alert-danger">Failed to load order details. Please try again.</div>');
-                    }
-                });
+                // Fetch payment details for this order
+                fetchPaymentDetails(orderId, payStatus);
 
                 // Show the modal
                 $('#viewOrderModal').modal('show');
-            });
-
-            // Handle "Print Order" button click
-            $(document).on('click', '.print-order', function () {
-                var orderId = $(this).data('id');
-                // Redirect to download_order.php for printing/downloading
-                window.open('download_order.php?id=' + orderId, '_blank');
-            });
-
-            // Handle "Mark as Paid" button click
-            $('.mark-paid').click(function (e) {
-                e.preventDefault();
-                var orderId = $(this).data('id');
-                $('#order_id').val(orderId);
-                $('#markPaidModal').modal('show');
-            });
-
-            // Handle form submission for marking an order as paid
-            $('#markPaidForm').submit(function (e) {
-                e.preventDefault();
-                var formData = new FormData(this);
-
-                // Add current page state parameters
-                formData.append('search', '<?php echo htmlspecialchars($search); ?>');
-                formData.append('limit', '<?php echo $limit; ?>');
-                formData.append('page', '<?php echo $page; ?>');
-
-                $.ajax({
-                    url: 'process_payment.php',
-                    type: 'POST',
-                    data: formData,
-                    contentType: false,
-                    processData: false,
-                    success: function (response) {
-                        var result = JSON.parse(response);
-                        if (result.status === 'success') {
-                            // Close modal
-                            $('#markPaidModal').modal('hide');
-
-                            // Show success message and reload the page
-                            alert(result.message);
-                            window.location.reload();
-                        } else {
-                            // Show error message
-                            alert('Error: ' + result.message);
-                        }
-                    },
-                    error: function () {
-                        alert('An error occurred while processing the payment. Please try again.');
-                    }
-                });
-            });
-
-            // Handle "Cancel Order" button click
-            $('.cancel-order').click(function (e) {
-                e.preventDefault();
-                var orderId = $(this).data('id');
-                var customerName = $(this).data('customer');
-
-                $('#cancel_order_id').text(orderId);
-                $('#cancel_customer_name').text(customerName);
-                $('#confirm_cancel_order_id').val(orderId);
-
-                $('#cancelOrderModal').modal('show');
-            });
-
-            // Validate and update the cancellation reason when submitting the form
-            $('#cancelOrderForm').submit(function (e) {
-                var reason = $('#cancellation_reason').val().trim();
-
-                if (reason === '') {
-                    e.preventDefault();
-                    alert('Please provide a reason for cancellation.');
-                    $('#cancellation_reason').focus();
-                    return false;
-                }
-
-                // Update the hidden reason field before submitting
-                $('#confirm_cancellation_reason').val(reason);
-                return true;
-            });
-
-            // Transfer cancellation reason from modal textarea to hidden form field
-            $('#cancelOrderModal').on('shown.bs.modal', function () {
-                $('#cancellation_reason').focus();
-            });
-
-            $('#cancellation_reason').on('input', function () {
-                $('#confirm_cancellation_reason').val($(this).val());
-            });
+            },
+            error: function () {
+                $('#orderDetails').html('Failed to load order details.');
+            }
         });
+    });
+
+    // Handle Print Order button click (existing code)
+    $(document).on('click', '.print-order', function () {
+        var orderId = $(this).data('id');
+
+        // Open the download_order.php in a new window for printing
+        var printWindow = window.open('download_order.php?id=' + orderId + '&format=html&print=true', '_blank');
+
+        // Trigger print when the new window is loaded
+        printWindow.onload = function () {
+            printWindow.print();
+        };
+    });
+
+    // Function to fetch payment details (existing code)
+    function fetchPaymentDetails(orderId, payStatus) {
+        if (payStatus === 'paid') {
+            $.ajax({
+                url: 'get_payment_details.php',
+                type: 'GET',
+                data: { order_id: orderId },
+                dataType: 'json',
+                success: function (data) {
+                    if (data.success) {
+                        // Create payment details HTML
+                        var html = '<div class="card">' +
+                            '<div class="card-body">' +
+                            '<div class="row">' +
+                            '<div class="col-md-6">' +
+                            '<p><strong>Payment Method:</strong> ' + data.payment_method + '</p>' +
+                            '<p><strong>Amount Paid:</strong> ' + data.amount_paid + '</p>' +
+                            '</div>' +
+                            '<div class="col-md-6">' +
+                            '<p><strong>Payment Date:</strong> ' + data.payment_date + '</p>' +
+                            '<p><strong>Processed By:</strong> ' + data.processed_by + '</p>' +
+                            '</div>' +
+                            '</div>';
+
+                        // Add payment slip if available
+                        if (data.slip) {
+                            // Determine file extension for proper display
+                            var fileExt = data.slip.split('.').pop().toLowerCase();
+                            if (fileExt === 'pdf') {
+                                // PDF display (link only)
+                                html += '<div class="text-center mt-3">' +
+                                    '<p><strong>Payment Slip:</strong></p>' +
+                                    '<a href="uploads/payments/' + data.slip + '" target="_blank" class="btn btn-primary">' +
+                                    '<i class="fas fa-file-pdf me-2"></i>View Payment PDF</a>' +
+                                    '</div>';
+                            } else {
+                                // Image display (with preview)
+                                html += '<div class="text-center mt-3">' +
+                                    '<p><strong>Payment Slip:</strong></p>' +
+                                    '<a href="uploads/payments/' + data.slip + '" target="_blank">' +
+                                    '<img src="uploads/payments/' + data.slip + '" class="img-fluid" style="max-height: 300px; border: 1px solid #ddd; padding: 5px;">' +
+                                    '</a>' +
+                                    '</div>';
+                            }
+                        }
+
+                        html += '</div></div>';
+
+                        // Show the payment section
+                        $('#paymentDetails').html(html);
+                        $('#paymentInfoSection').show();
+                    } else {
+                        // If there's an error, show an error message
+                        $('#paymentDetails').html('<div class="alert alert-warning">No payment details found for this order.</div>');
+                        $('#paymentInfoSection').show();
+                    }
+                },
+                error: function () {
+                    // If AJAX fails, show an error
+                    $('#paymentDetails').html('<div class="alert alert-danger">Failed to load payment details.</div>');
+                    $('#paymentInfoSection').show();
+                }
+            });
+        } else {
+            // If order is not paid, show appropriate message
+            $('#paymentDetails').html('<div class="alert alert-info">This order has not been paid yet.</div>');
+            $('#paymentInfoSection').show();
+        }
+    }
+
+    // FIXED: Handle "Paid" button click
+    $('.mark-paid').click(function (e) {
+        e.preventDefault(); // Prevent default link behavior
+
+        var orderId = $(this).data('id'); // Get the order ID
+        
+        // Get additional information about the order from the row
+        var orderRow = $(this).closest('tr');
+        var customerName = orderRow.find('td:eq(1)').text().trim(); // Assuming customer name is in the second column
+        
+        // Update modal title with order info
+        $('#markPaidModalLabel').html('<i class="fas fa-money-bill-wave me-2"></i>Payment Sheet - Order #' + orderId);
+        
+        // Set the order ID in the form
+        $('#order_id').val(orderId);
+        
+        // Make sure payment_method is set to a default value if it exists
+        if ($('#payment_method').length > 0) {
+            // If payment_method is a select element, select the first option
+            if ($('#payment_method').is('select') && $('#payment_method option').length > 0) {
+                $('#payment_method').prop('selectedIndex', 0);
+            }
+        }
+        
+        // Reset the form to clear any previous data
+        $('#markPaidForm')[0].reset();
+        $('#order_id').val(orderId); // Re-set the order ID after form reset
+        
+        // Show the modal
+        $('#markPaidModal').modal('show');
+    });
+
+    // FIXED: Handle mark as paid form submission
+    $('#markPaidForm').submit(function (e) {
+        e.preventDefault(); // Prevent default form submission
+
+        // Simple validation
+        var fileInput = $('#payment_slip')[0];
+        
+        // Check if payment_method exists and is required
+        var paymentMethod = '';
+        if ($('#payment_method').length > 0) {
+            paymentMethod = $('#payment_method').val();
+            if (!paymentMethod || paymentMethod === '') {
+                alert('Please select a payment method.');
+                return false;
+            }
+        }
+
+        if (fileInput.files.length === 0) {
+            alert('Please select a file to upload.');
+            return false;
+        }
+
+        var fileSize = fileInput.files[0].size / 1024 / 1024; // in MB
+        if (fileSize > 2) {
+            alert('File size exceeds 2MB. Please choose a smaller file.');
+            return false;
+        }
+
+        // Get the order ID directly from the hidden field to ensure it's correct
+        var orderId = $('#order_id').val();
+        if (!orderId || orderId === '') {
+            alert('Error: Order ID is missing. Please try again.');
+            return false;
+        }
+
+        // Create FormData object and manually append all form fields
+        var formData = new FormData();
+        
+        // Add the mark_as_paid flag that the PHP script expects
+        formData.append('mark_as_paid', 'true');
+        
+        // Add the file
+        formData.append('payment_slip', fileInput.files[0]);
+        
+        // Manually add order_id
+        formData.append('order_id', orderId);
+        
+        // Add payment method
+        if (paymentMethod) {
+            formData.append('payment_method', paymentMethod);
+        }
+        
+        // Add any other form fields that need to be included
+        var amount = $('#amount_paid').val();
+        if (amount) {
+            formData.append('amount_paid', amount);
+        }
+        
+        // Add notes if present
+        var notes = $('#payment_notes').val();
+        if (notes) {
+            formData.append('payment_notes', notes);
+        }
+        
+        // Add any other form fields that might be present
+        var otherFields = ['payment_date', 'reference_number'];
+        otherFields.forEach(function(field) {
+            var value = $('#' + field).val();
+            if (value) {
+                formData.append(field, value);
+            }
+        });
+
+        // Don't add URL parameters to form data as they should be handled server-side
+        // The server should get these from $_GET not from $_POST
+
+        // Show loading indicator
+        var submitBtn = $('#markPaidForm').find('button[type="submit"]');
+        var originalBtnText = submitBtn.html();
+        submitBtn.html('<i class="fas fa-spinner fa-spin me-1"></i> Processing...');
+        submitBtn.prop('disabled', true);
+        
+        // Log formData contents for debugging (can be removed in production)
+        console.log('Submitting form with data:');
+        for (var pair of formData.entries()) {
+            console.log(pair[0] + ': ' + pair[1]);
+        }
+
+        $.ajax({
+            url: 'mark_paid.php',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function (response) {
+                try {
+                    // First try to parse as JSON
+                    var jsonResponse = JSON.parse(response);
+                    if (jsonResponse.status === 'success') {
+                        alert(jsonResponse.message || 'Order marked as paid successfully.');
+                        $('#markPaidModal').modal('hide');
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + (jsonResponse.message || 'Failed to mark order as paid.'));
+                        submitBtn.html(originalBtnText);
+                        submitBtn.prop('disabled', false);
+                    }
+                } catch (e) {
+                    // If not valid JSON, check if it contains success message
+                    if (response.toLowerCase().indexOf('success') !== -1) {
+                        alert('Order marked as paid successfully.');
+                        $('#markPaidModal').modal('hide');
+                        window.location.reload();
+                    } else {
+                        // Otherwise show the raw response as an error
+                        alert('Error response from server: ' + response);
+                        submitBtn.html(originalBtnText);
+                        submitBtn.prop('disabled', false);
+                    }
+                }
+            },
+            error: function (xhr, status, error) {
+                alert('Failed to mark order as paid. Error: ' + error);
+                console.error('AJAX Error:', xhr.responseText);
+                submitBtn.html(originalBtnText);
+                submitBtn.prop('disabled', false);
+            }
+        });
+    });
+
+    // Reset form when modal is hidden
+    $('#markPaidModal').on('hidden.bs.modal', function () {
+        $('#markPaidForm')[0].reset();
+    });
+
+    // FIXED: Handle Cancel Order button click and modal
+    $('.cancel-order').click(function (e) {
+        e.preventDefault();
+        var orderId = $(this).data('id');
+        var customerName = $(this).data('customer');
+
+        // Set values in the modal
+        $('#cancel_order_id').text(orderId);
+        $('#cancel_customer_name').text(customerName);
+        $('#confirm_cancel_order_id').val(orderId);
+
+        // Clear any previous cancellation reason
+        $('#cancellation_reason').val('');
+        $('#confirm_cancellation_reason').val('');
+
+        // Show the modal
+        $('#cancelOrderModal').modal('show');
+    });
+
+    // FIXED: Transfer cancellation reason to the form on submit
+    $('#cancelOrderForm').on('submit', function (e) {
+        // First get the reason from the textarea
+        var reason = $('#cancellation_reason').val().trim();
+
+        // Validation
+        if (reason === '') {
+            e.preventDefault();
+            alert('Please provide a cancellation reason.');
+            return false;
+        }
+
+        // Set the reason in the hidden field
+        $('#confirm_cancellation_reason').val(reason);
+
+        // Disable the submit button to prevent double submission
+        $('#confirm_cancel_btn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i> Processing...');
+
+        // Form will submit normally after this
+        return true;
+    });
+
+    // FIXED: Update reason field when typing
+    $('#cancellation_reason').on('input', function () {
+        $('#confirm_cancellation_reason').val($(this).val());
+    });
+
+    // Fade out alert messages after 5 seconds
+    setTimeout(function () {
+        $(".alert-dismissible").fadeOut("slow");
+    }, 5000);
+});
+
+// Sidebar Toggle Script
+document.addEventListener('DOMContentLoaded', function () {
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function (e) {
+            e.preventDefault();
+            document.body.classList.toggle('sb-sidenav-toggled');
+            localStorage.setItem('sb|sidebar-toggle', document.body.classList.contains('sb-sidenav-toggled'));
+        });
+    }
+
+    // Check for stored state on page load
+    const storedSidebarState = localStorage.getItem('sb|sidebar-toggle');
+    if (storedSidebarState === 'true') {
+        document.body.classList.add('sb-sidenav-toggled');
+    }
+});
     </script>
 
-    <script src="js/scripts.js"></script>
 </body>
 
 </html>
